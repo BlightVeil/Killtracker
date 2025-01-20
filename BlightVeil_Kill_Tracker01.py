@@ -221,22 +221,22 @@ def check_exclusion_scenarios(line, logger):
 
 def post_heartbeat(rsi_handle, logger):
     global global_heartbeat_active
+    global global_active_ship
     while True:
         time.sleep(5)
-        global global_active_ship
 
         # Prepare the data for the Discord bot
+        if "N/A" == global_active_ship or "" == global_active_ship:
+            status = "dead"
+        else:
+            status = "alive"
+
         json_data = {
             'is_heartbeat': True,
             'player': rsi_handle,
-            'victim': "N/A",
-            'time': "N/A",
             'zone': global_active_ship,
-            'weapon': "N/A",
-            'rsi_profile': "N/A",
-            'game_mode': "N/A",
             'client_ver': "7.0",
-            'killers_ship': "N/A",
+            'status': status,  # Report status as 'alive'
         }
 
         heartbeat_url = "http://38.46.216.78:25966/validateKey"
