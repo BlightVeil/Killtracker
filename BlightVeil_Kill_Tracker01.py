@@ -206,8 +206,12 @@ def post_heartbeat(rsi_handle, logger):
         heartbeat_url = "http://38.46.216.78:25966/validateKey"
         headers = {
             'content-type': 'application/json',
-            'Authorization': entered_key  # Send the key in the header
+            'Authorization': api_key["value"] if api_key["value"] else ""
         }
+
+        if not api_key["value"]:
+            logger.log("Kill event will not be sent. Enter valid key to establish connection with Servitor...")
+            return
 
         # Send heartbeat to Servitor. Should never reach this until API key is already validated.
         try:
