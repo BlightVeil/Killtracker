@@ -470,6 +470,16 @@ def setup_game_running_gui(app):
     )
     load_key_button.pack(side=tk.LEFT, padx=(5, 0))
 
+    load_key_button = tk.Button(
+        key_frame,
+        text="Connect To Commander",
+        font=("Times New Roman", 12),
+        command=lambda: start_heartbeat_thread(app, rsi_name, logger),  # Pass logger here
+        bg="#000000",
+        fg="#ffffff",
+    )
+    load_key_button.pack(side=tk.LEFT, padx=(5, 0))
+
     return logger
 
 def setup_gui(game_running):
@@ -616,8 +626,10 @@ def start_tail_log_thread(log_file_location, rsi_name, logger):
 
 
 def start_heartbeat_thread(rsi_name, logger):
+    """Start the heartbeat in a seperate thread"""
     thread = threading.Thread(target=post_heartbeat, args=(rsi_name, logger))
     thread.daemon = True
+    logger.log("Connecting to commander!")
     thread.start()
 
 
@@ -656,7 +668,6 @@ if __name__ == '__main__':
             rsi_handle = find_rsi_handle(log_file_location)
             if rsi_handle:
                 start_tail_log_thread(log_file_location, rsi_handle, logger)
-                start_heartbeat_thread(rsi_handle, logger)
     
     # Initiate auto-shutdown after 72 hours (72 * 60 * 60 seconds)
     if logger:
