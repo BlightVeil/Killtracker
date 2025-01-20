@@ -186,7 +186,7 @@ def check_exclusion_scenarios(line, logger):
 
 def post_heartbeat(rsi_handle, logger):
     while True:
-        time.sleep(10)
+        time.sleep(5)
         global global_active_ship
 
         # Prepare the data for the Discord bot
@@ -223,10 +223,17 @@ def post_heartbeat(rsi_handle, logger):
             logger.log(f"Error connecting to Servitor: {e}")
             # TODO: Kill client !? Or just stop heartbeat thread
 
-
 def parse_kill_line(line, target_name, logger):
+    """
+    Parses a kill line from the log and handles player kills, deaths, and related events.
+    """
+    global global_active_ship
+    global player_status  # Add a global status variable to track player's state
+    player_status = "alive"  # Default status is alive
+
     if not check_exclusion_scenarios(line, logger):
         return
+
     split_line = line.split(' ')
 
     kill_time = split_line[0].strip('\'')
@@ -240,6 +247,35 @@ def parse_kill_line(line, target_name, logger):
         # Log a message for the player's own death
         show_loading_animation(logger, app)
         logger.log("You have fallen in the service of BlightVeil.")
+        
+        # Update the player's status to dead
+        player_status = "dead"
+
+        # Send death-event to the server via heartbeat
+        json_data = {
+            'is_heartbeat': True,
+            'player': target_name,
+            'zone': killed_zone,
+            'client_ver': "7.0",
+            'status': player_status,  # Report status as 'dead'
+        }
+        headers = {
+            'content-type': 'application/json',
+            'Authorization': api_key["value"] if api_key["value"] else ""
+        }
+
+        try:
+            response = requests.post(
+                "http://38.46.216.78:25966/validateKey",
+                headers=headers,
+                data=json.dumps(json_data),
+                timeout=5
+            )
+            if response.status_code != 200:
+                logger.log(f"Failed to report death event: {response.status_code}.")
+        except Exception as e:
+            logger.log(f"Error reporting death event: {e}")
+
         return
 
     # Log a custom message for a successful kill
@@ -285,12 +321,11 @@ def parse_kill_line(line, target_name, logger):
         show_loading_animation(logger, app)
         logger.log(f"Kill event will not be sent. Enter valid key to establish connection with Servitor...")
 
-
-def read_existing_log(log_file_location, rsi_name):
+def read_existing_log(log_file_location, rsi_handle):
     sc_log = open(log_file_location, "r")
     lines = sc_log.readlines()
     for line in lines:
-        read_log_line(line, rsi_name, True, logger)
+        read_log_line(line, rsi_handle, True, logger)
 
 
 def find_rsi_handle(log_file_location):
@@ -344,7 +379,7 @@ def load_existing_key(app, logger):
                     show_loading_animation(logger, app)
                     logger.log("Initiating Servitor Connection...")
                     logger.log(".")
-                    app.update_idletasks()
+                    app.update_idletasks()  # Ensure app is a valid Tkinter instance
                     time.sleep(0.5)
                     logger.log("..")
                     app.update_idletasks()
@@ -355,7 +390,7 @@ def load_existing_key(app, logger):
                     heartbeat_url = "http://38.46.216.78:25966/validateKey"
                     headers = {
                         'content-type': 'application/json',
-                        'Authorization': entered_key 
+                        'Authorization': entered_key,
                     }
 
                     # Send heartbeat to Servitor
@@ -428,7 +463,6 @@ def activate_key(app, key_entry, logger):
     except Exception as e:
         logger.log(f"Error in activate_key: {e}")
 
-
 def setup_game_running_gui(app):
     """Setup GUI elements when the game is running."""
     key_frame = tk.Frame(app, bg="#484759")
@@ -470,18 +504,19 @@ def setup_game_running_gui(app):
     )
     load_key_button.pack(side=tk.LEFT, padx=(5, 0))
 
-    load_key_button = tk.Button(
-        key_frame,
-        text="Connect To Commander",
+    # Commander Mode Button
+    commander_mode_button = tk.Button(
+        app,
+        text="Commander Mode",
         font=("Times New Roman", 12),
-        command=lambda: start_heartbeat_thread(app, rsi_name, logger),  # Pass logger here
+        command=lambda: open_commander_mode(logger),
         bg="#000000",
         fg="#ffffff",
     )
-    load_key_button.pack(side=tk.LEFT, padx=(5, 0))
+    commander_mode_button.pack(pady=(10, 10)) 
 
     return logger
-
+    
 def setup_gui(game_running):
     app = tk.Tk()
     app.title("BlightVeil Kill Tracker")
@@ -536,7 +571,7 @@ def setup_gui(game_running):
 
     # Game Running or Not
     if game_running:
-        logger = setup_game_running_gui(app)  # Initialize logger here
+        logger = setup_game_running_gui(app)  
     else:
         message_label = tk.Label(
             app,
@@ -564,17 +599,148 @@ def setup_gui(game_running):
     footer_text.pack(pady=5)
 
     return app, logger
+    
+def open_commander_mode(logger):
+    """
+    Opens a new window for Commander Mode, displaying connected users and allocated forces.
+    Includes functionality for moving users to the allocated forces list and handling status changes.
+    """
+    commander_window = tk.Toplevel()
+    commander_window.title("Commander Mode")
+    commander_window.geometry("800x600")
+    commander_window.configure(bg="#484759")
+
+    # Search bar for filtering connected users
+    search_var = tk.StringVar()
+    search_bar = tk.Entry(commander_window, textvariable=search_var, font=("Consolas", 12), width=30)
+    search_bar.pack(pady=(10, 0))
+
+    # Connected Users Listbox
+    connected_users_frame = tk.Frame(commander_window, bg="#484759")
+    connected_users_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 5))
+
+    connected_users_label = tk.Label(
+        connected_users_frame, text="Connected Users", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+    )
+    connected_users_label.pack()
+
+    connected_users_listbox = tk.Listbox(
+        connected_users_frame, 
+        selectmode=tk.MULTIPLE,
+        width=40,
+        height=20,
+        bg="#282a36",
+        fg="#f8f8f2",
+        font=("Consolas", 12)
+    )
+    connected_users_listbox.pack(fill=tk.BOTH, expand=True)
+
+    # Allocated Forces Listbox
+    allocated_forces_frame = tk.Frame(commander_window, bg="#484759")
+    allocated_forces_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 10))
+
+    allocated_forces_label = tk.Label(
+        allocated_forces_frame, text="Allocated Forces", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+    )
+    allocated_forces_label.pack()
+
+    allocated_forces_listbox = tk.Listbox(
+        allocated_forces_frame, 
+        width=40,
+        height=20,
+        bg="#282a36",
+        fg="#00ff00",  # Default to green (alive)
+        font=("Consolas", 12)
+    )
+    allocated_forces_listbox.pack(fill=tk.BOTH, expand=True)
+
+    # Add Button
+    add_button = tk.Button(
+        commander_window,
+        text=">>>",
+        font=("Times New Roman", 12),
+        command=lambda: allocate_selected_users(),
+        bg="#000000",
+        fg="#ffffff",
+    )
+    add_button.pack(pady=(0, 10))
+
+    # Close Button
+    close_button = tk.Button(
+        commander_window,
+        text="Close",
+        font=("Times New Roman", 12),
+        command=commander_window.destroy,
+        bg="#000000",
+        fg="#ffffff",
+    )
+    close_button.pack(pady=(10, 10))
+
+    # Search Functionality
+    def search_users(*args):
+        search_query = search_var.get().lower()
+        connected_users_listbox.delete(0, tk.END)
+        for user in logger.connected_users:
+            if search_query in user['player'].lower():
+                connected_users_listbox.insert(tk.END, user['player'])
+
+    search_var.trace("w", search_users)
+
+    # Allocate Selected Users to Allocated Forces
+    def allocate_selected_users():
+        selected_indices = connected_users_listbox.curselection()
+        for index in selected_indices:
+            player_name = connected_users_listbox.get(index)
+            # Find the full user info
+            user_info = next((user for user in logger.connected_users if user['player'] == player_name), None)
+            if user_info:
+                # Add to allocated forces
+                allocated_forces_listbox.insert(tk.END, f"{user_info['player']} - Zone: {user_info['zone']}")
+
+    # Update Allocated Forces Based on Status
+    def update_allocated_forces(active_users):
+        """
+        Update the colors of users in the allocated forces list based on their status.
+        """
+        for index in range(allocated_forces_listbox.size()):
+            item_text = allocated_forces_listbox.get(index)
+            # Extract the player's name
+            player_name = item_text.split(" - ")[0]
+            user = next((user for user in active_users if user['player'] == player_name), None)
+            if user:
+                # Change text color based on status
+                if user['status'] == "dead":
+                    allocated_forces_listbox.itemconfig(index, {'fg': 'red'})
+                elif user['status'] == "alive":
+                    allocated_forces_listbox.itemconfig(index, {'fg': 'green'})
+
+    # Refresh User List Function
+    def refresh_user_list(active_users):
+        """
+        Refresh the connected users list and update allocated forces based on status.
+        """
+        # Update Connected Users Listbox
+        connected_users_listbox.delete(0, tk.END)
+        logger.connected_users = active_users
+        for user in active_users:
+            connected_users_listbox.insert(tk.END, user['player'])
+
+        # Update Allocated Forces Colors
+        update_allocated_forces(active_users)
+
+    # Attach the refresh_user_list function to the logger
+    logger.refresh_user_list = refresh_user_list
 
 
 # Event checking logic. Look for substrings, do stuff based on what we find.
-def read_log_line(line, rsi_name, upload_kills, logger):
+def read_log_line(line, rsi_handle, upload_kills, logger):
     if -1 != line.find("<Context Establisher Done>"):
         set_game_mode(line, logger)
-    elif -1 != line.find(rsi_name):
+    elif -1 != line.find(rsi_handle):
         if -1 != line.find("OnEntityEnterZone"):
             set_player_zone(line, logger)
         if -1 != line.find("CActor::Kill") and not check_substring_list(line, ignore_kill_substrings) and upload_kills:
-            parse_kill_line(line, rsi_name, logger)
+            parse_kill_line(line, rsi_handle, logger)
     elif -1 != line.find("CPlayerShipRespawnManager::OnVehicleSpawned") and (
             "SC_Default" != global_game_mode) and (-1 != line.find(global_player_geid)):
         set_ac_ship(line, logger)
@@ -584,7 +750,7 @@ def read_log_line(line, rsi_name, upload_kills, logger):
         destroy_player_zone(line, logger)
 
 
-def tail_log(log_file_location, rsi_name, logger):
+def tail_log(log_file_location, rsi_handle, logger):
     """Read the log file and display events in the GUI."""
     global global_game_mode, global_player_geid
     sc_log = open(log_file_location, "r")
@@ -600,7 +766,7 @@ def tail_log(log_file_location, rsi_name, logger):
     lines = sc_log.readlines()
     print("Loading old log (if available)! Kills shown will not be uploaded as they are stale.")
     for line in lines:
-        read_log_line(line, rsi_name, False, logger)
+        read_log_line(line, rsi_handle, False, logger)
 
     # Main loop to monitor the log
     last_log_file_size = os.stat(log_file_location).st_size
@@ -615,21 +781,21 @@ def tail_log(log_file_location, rsi_name, logger):
                 sc_log = open(log_file_location, "r")
                 last_log_file_size = os.stat(log_file_location).st_size
         else:
-            read_log_line(line, rsi_name, True, logger)
+            read_log_line(line, rsi_handle, True, logger)
 
 
-def start_tail_log_thread(log_file_location, rsi_name, logger):
+def start_tail_log_thread(log_file_location, rsi_handle, logger):
     """Start the log tailing in a separate thread."""
-    thread = threading.Thread(target=tail_log, args=(log_file_location, rsi_name, logger))
+    thread = threading.Thread(target=tail_log, args=(log_file_location, rsi_handle, logger))
     thread.daemon = True
     thread.start()
 
 
-def start_heartbeat_thread(rsi_name, logger):
+def start_heartbeat_thread(rsi_handle, logger):
     """Start the heartbeat in a seperate thread"""
-    thread = threading.Thread(target=post_heartbeat, args=(rsi_name, logger))
+    thread = threading.Thread(target=post_heartbeat, args=(rsi_handle, logger))
     thread.daemon = True
-    logger.log("Connecting to commander!")
+    logger.log("Initializing Command Mode...")
     thread.start()
 
 
@@ -665,9 +831,9 @@ if __name__ == '__main__':
         # Start log monitoring in a separate thread
         log_file_location = set_sc_log_location()
         if log_file_location:
-            rsi_handle = find_rsi_handle(log_file_location)
-            if rsi_handle:
-                start_tail_log_thread(log_file_location, rsi_handle, logger)
+            rsi_handlersi_handle = find_rsi_handle(log_file_location)
+            if rsi_handlersi_handle:
+                start_tail_log_thread(log_file_location, rsi_handlersi_handle, logger)
     
     # Initiate auto-shutdown after 72 hours (72 * 60 * 60 seconds)
     if logger:
