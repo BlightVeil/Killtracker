@@ -184,6 +184,41 @@ def check_exclusion_scenarios(line, logger):
     return True
 
 
+def post_heartbeat(rsi_handle, logger):
+    while True:
+        time.sleep(10)
+        global global_active_ship
+
+        # Prepare the data for the Discord bot
+        json_data = {
+            'is_heartbeat': True,
+            'player': rsi_handle,
+            'victim': "N/A",
+            'time': "N/A",
+            'zone': "N/A",
+            'weapon': "N/A",
+            'rsi_profile': "N/A",
+            'game_mode': "N/A",
+            'client_ver': "7.0",
+            'killers_ship': global_active_ship,
+        }
+
+        heartbeat_url = "http://38.46.216.78:25966/validateKey"
+        headers = {
+            'content-type': 'application/json',
+            'Authorization': entered_key  # Send the key in the header
+        }
+
+        # Send heartbeat to Servitor. Should never reach this until API key is already validated.
+        try:
+            response = requests.post(heartbeat_url, headers=headers, data=json.dumps(json_data), timeout=5)
+            # logger.log(f"Server responded with status code: {response.status_code}")
+            if response.status_code != 200:
+                logger.log(f"Servitor connectivity error: {response.status_code}.")
+        except Exception as e:
+            logger.log(f"Error connecting to Servitor: {e}")
+            # TODO: Kill client !? Or just stop heartbeat thread
+
 
 def parse_kill_line(line, target_name, logger):
     if not check_exclusion_scenarios(line, logger):
@@ -210,6 +245,7 @@ def parse_kill_line(line, target_name, logger):
 
     # Prepare the data for the Discord bot
     json_data = {
+        'is_heartbeat': False,
         'player': target_name,
         'victim': killed,
         'time': kill_time,
@@ -531,6 +567,12 @@ def start_tail_log_thread(log_file_location, rsi_name, logger):
     thread.start()
 
 
+def start_heartbeat_thread(rsi_name, logger):
+    thread = threading.Thread(target=post_heartbeat, args=(rsi_name, logger))
+    thread.daemon = True
+    thread.start()
+
+
 def is_game_running():
     """Check if Star Citizen is running."""
     return check_if_process_running("StarCitizen") is not None
@@ -566,6 +608,7 @@ if __name__ == '__main__':
             rsi_handle = find_rsi_handle(log_file_location)
             if rsi_handle:
                 start_tail_log_thread(log_file_location, rsi_handle, logger)
+                start_heartbeat_thread(rsi_handle, logger)
     
     # Initiate auto-shutdown after 72 hours (72 * 60 * 60 seconds)
     if logger:
