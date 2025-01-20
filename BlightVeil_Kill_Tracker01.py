@@ -333,6 +333,145 @@ def set_game_mode(line, logger):
         global_active_ship_id = "N/A"
 
 
+def load_existing_key(app, logger):
+    """Handles loading an existing API key from the configuration file."""
+    if os.path.exists("killtracker_key.cfg"):
+        try:
+            with open("killtracker_key.cfg", "r") as f:
+                entered_key = f.readline().strip()
+                if entered_key:
+                    logger.log("Activating key...")
+                    show_loading_animation(logger, app)
+                    logger.log("Initiating Servitor Connection...")
+                    logger.log(".")
+                    app.update_idletasks()
+                    time.sleep(0.5)
+                    logger.log("..")
+                    app.update_idletasks()
+                    time.sleep(0.5)
+                    logger.log("...")
+
+                    # Prepare the request
+                    heartbeat_url = "http://38.46.216.78:25966/validateKey"
+                    headers = {
+                        'content-type': 'application/json',
+                        'Authorization': entered_key 
+                    }
+
+                    # Send heartbeat to Servitor
+                    try:
+                        response = requests.post(heartbeat_url, headers=headers, timeout=5)
+                        if response.status_code == 200:
+                            response_data = response.json()
+                            if response_data.get("status") == "valid":
+                                api_key["value"] = entered_key
+                                logger.log("Servitor Connection Established.")
+                                logger.log("Go forth and KILL...")
+                            else:
+                                logger.log("Invalid key. Please input a valid key to establish connection with Servitor.")
+                        else:
+                            logger.log(f"Servitor connectivity error: {response.status_code}.")
+                    except Exception as e:
+                        logger.log(f"Error connecting to Servitor: {e}")
+                else:
+                    logger.log("Error: No key detected in file. Input valid key to establish connection with Servitor.")
+        except Exception as e:
+            logger.log(f"Error in load_existing_key: {e}")
+    else:
+        logger.log("No key file found. Please input a valid key to establish connection with Servitor.")
+
+
+def activate_key(app, key_entry, logger):
+    """Handles activating a new API key entered by the user."""
+    try:
+        entered_key = key_entry.get().strip()
+        if entered_key:
+            logger.log("Activating key...")
+            show_loading_animation(logger, app)
+            logger.log("Initiating Servitor Connection...")
+            logger.log(".")
+            app.update_idletasks()
+            time.sleep(0.5)
+            logger.log("..")
+            app.update_idletasks()
+            time.sleep(0.5)
+            logger.log("...")
+
+            # Prepare heartbeat payload
+            heartbeat_url = "http://38.46.216.78:25966/validateKey"
+            headers = {
+                'content-type': 'application/json',
+                'Authorization': entered_key  # Send the key in the header
+            }
+
+            # Send heartbeat to Servitor
+            try:
+                response = requests.post(heartbeat_url, headers=headers, timeout=5)
+                if response.status_code == 200:
+                    response_data = response.json()
+                    if response_data.get("status") == "valid":
+                        api_key["value"] = entered_key
+                        logger.log("Servitor Connection Established.")
+                        logger.log("Go forth and KILL...")
+                        
+                        # Save the key locally
+                        with open("killtracker_key.cfg", "w") as f:
+                            f.write(entered_key)
+                    else:
+                        logger.log("Invalid key. Please enter a valid key to establish connection with Servitor.")
+                else:
+                    logger.log(f"Servitor connectivity error: {response.status_code}.")
+            except Exception as e:
+                logger.log(f"Error connecting to Servitor: {e}")
+        else:
+            logger.log("Error: No key detected. Input valid key to establish connection with Servitor.")
+    except Exception as e:
+        logger.log(f"Error in activate_key: {e}")
+
+
+def setup_game_running_gui(app):
+    """Setup GUI elements when the game is running."""
+    key_frame = tk.Frame(app, bg="#484759")
+    key_frame.pack(pady=(10, 10))
+
+    key_label = tk.Label(
+        key_frame, text="Enter Key:", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+    )
+    key_label.pack(side=tk.LEFT, padx=(0, 5))
+
+    key_entry = tk.Entry(key_frame, width=30, font=("Times New Roman", 12))
+    key_entry.pack(side=tk.LEFT)
+
+    # Initialize logger here
+    text_area = scrolledtext.ScrolledText(
+        app, wrap=tk.WORD, width=80, height=20, state=tk.DISABLED, bg="#282a36", fg="#f8f8f2", font=("Consolas", 12)
+    )
+    text_area.pack(padx=10, pady=10)
+
+    logger = EventLogger(text_area)
+
+    activate_button = tk.Button(
+        key_frame,
+        text="Activate",
+        font=("Times New Roman", 12),
+        command=lambda: activate_key(app, key_entry, logger),  # Pass logger here
+        bg="#000000",
+        fg="#ffffff",
+    )
+    activate_button.pack(side=tk.LEFT, padx=(5, 0))
+
+    load_key_button = tk.Button(
+        key_frame,
+        text="Load Existing Key",
+        font=("Times New Roman", 12),
+        command=lambda: load_existing_key(app, logger),  # Pass logger here
+        bg="#000000",
+        fg="#ffffff",
+    )
+    load_key_button.pack(side=tk.LEFT, padx=(5, 0))
+
+    return logger
+
 def setup_gui(game_running):
     app = tk.Tk()
     app.title("BlightVeil Kill Tracker")
@@ -385,105 +524,10 @@ def setup_gui(game_running):
 
         update_label.bind("<Button-1>", open_github)
 
+    # Game Running or Not
     if game_running:
-        # API Key Input
-        key_frame = tk.Frame(app, bg="#484759")
-        key_frame.pack(pady=(10, 10))
-
-        key_label = tk.Label(
-            key_frame, text="Enter Key:", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
-        )
-        key_label.pack(side=tk.LEFT, padx=(0, 5))
-
-        key_entry = tk.Entry(key_frame, width=30, font=("Times New Roman", 12))
-        key_entry.pack(side=tk.LEFT)
-
-        # Check for API Key file
-        def load_existing_key():
-            if os.path.exists("killtracker_key.cfg"):
-                try:
-                    f = open("killtracker_key.cfg", "r")
-                    entered_key = f.readline()
-                    if entered_key:
-                        logger.log("Activating key...")
-                        show_loading_animation(logger, app)
-                        logger.log("Establishing Servitor Connection...")
-                        logger.log(".")
-                        app.update_idletasks()
-                        time.sleep(0.5)
-                        logger.log("..")
-                        app.update_idletasks()
-                        time.sleep(0.5)
-                        logger.log("...")
-                        app.update_idletasks()
-                        time.sleep(0.5)
-
-                        # Set and log key activation
-                        api_key["value"] = entered_key
-                        logger.log("Servitor Connection Established.")
-                        logger.log("Go forth and slaughter...")
-                    else:
-                        logger.log("Error: No key detected. Input valid key to establish connection with Servitor.")
-                except Exception as e:
-                    logger.log(f"Error in activate_key: {e}")
-
-        def activate_key():
-            try:
-                entered_key = key_entry.get().strip()
-                if entered_key:
-                    logger.log("Activating key...")
-                    show_loading_animation(logger, app)
-                    logger.log("Establishing Servitor Connection...")
-                    logger.log(".")
-                    app.update_idletasks()  
-                    time.sleep(0.5)  
-                    logger.log("..")
-                    app.update_idletasks()
-                    time.sleep(0.5)
-                    logger.log("...")
-                    app.update_idletasks()
-                    time.sleep(0.5)
-
-                    # Set and log key activation
-                    api_key["value"] = entered_key
-                    logger.log("Servitor Connection Established.")
-                    logger.log("Go forth and slaughter...")
-                    f = open("killtracker_key.cfg", "w")
-                    f.write(entered_key)
-                else:
-                    logger.log("Error: No key detected. Input valid key to establish connection with Servitor.")
-            except Exception as e:
-                logger.log(f"Error in activate_key: {e}")
-
-        activate_button = tk.Button(
-            key_frame,
-            text="Activate",
-            font=("Times New Roman", 12),
-            command=activate_key,
-            bg="#000000",
-            fg="#ffffff",
-        )
-        activate_button.pack(side=tk.LEFT, padx=(5, 0))
-
-        load_key_button = tk.Button(
-            key_frame,
-            text="Load Existing Key",
-            font=("Times New Roman", 12),
-            command=load_existing_key,
-            bg="#000000",
-            fg="#ffffff",
-        )
-        load_key_button.pack(side=tk.LEFT, padx=(5, 0))
-
-        # Log Display
-        text_area = scrolledtext.ScrolledText(
-            app, wrap=tk.WORD, width=80, height=20, state=tk.DISABLED, bg="#282a36", fg="#f8f8f2", font=("Consolas", 12)
-        )
-        text_area.pack(padx=10, pady=10)
-
-        logger = EventLogger(text_area)
+        logger = setup_game_running_gui(app)  # Initialize logger here
     else:
-        # Relaunch Message
         message_label = tk.Label(
             app,
             text="You must launch Star Citizen before starting the tracker.\n\nPlease close this window, launch Star Citizen, and relaunch the BV Kill Tracker. ",
