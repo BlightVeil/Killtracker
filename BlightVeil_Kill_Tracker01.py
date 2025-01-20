@@ -89,9 +89,39 @@ def set_ac_ship(line, logger):
     print("Player has entered ship: ", global_active_ship)
 
 
+def post_heartbeat_enter_ship_event(rsi_handle, player_ship, logger):
+    """Update the ship and set player to alive with heartbeat!"""
+    json_data = {
+        'is_heartbeat': True,
+        'player': rsi_handle,
+        'zone': player_ship,
+        'client_ver': "7.0",
+        'status': "alive",  # Report status as 'alive'
+    }
+
+    headers = {
+        'content-type': 'application/json',
+        'Authorization': api_key["value"] if api_key["value"] else ""
+    }
+
+    try:
+        response = requests.post(
+            "http://38.46.216.78:25966/validateKey",
+            headers=headers,
+            data=json.dumps(json_data),
+            timeout=5
+        )
+        if response.status_code != 200:
+            logger.log(f"Failed to report ship status event: {response.status_code}.")
+    except Exception as e:
+        logger.log(f"Error reporting ship status event: {e}")
+
+
 def set_player_zone(line, logger):
     global global_active_ship
     global global_active_ship_id
+    global global_heartbeat_active
+    global global_rsi_handle
     line_index = line.index("-> Entity ") + len("-> Entity ")
     if 0 == line_index:
         print("Active Zone Change: ", global_active_ship)
@@ -104,6 +134,8 @@ def set_player_zone(line, logger):
             global_active_ship = potential_zone[:potential_zone.rindex('_')]
             global_active_ship_id = potential_zone[potential_zone.rindex('_') + 1:]
             print(f"Active Zone Change: {global_active_ship} with ID: {global_active_ship_id}")
+            if global_heartbeat_active:
+                post_heartbeat_enter_ship_event(global_rsi_handle, global_active_ship, logger)
             return
 
 
@@ -189,8 +221,6 @@ def check_exclusion_scenarios(line, logger):
 
 def post_heartbeat(rsi_handle, logger):
     global global_heartbeat_active
-    global_heartbeat_active = True
-    posted_connected_message = False
     while True:
         time.sleep(5)
         global global_active_ship
@@ -223,12 +253,11 @@ def post_heartbeat(rsi_handle, logger):
         # Send heartbeat to Servitor. Should never reach this until API key is already validated.
         try:
             response = requests.post(heartbeat_url, headers=headers, data=json.dumps(json_data), timeout=5)
-            # logger.log(f"Server responded with status code: {response.status_code}")
             if response.status_code != 200:
                 logger.log(f"Commander connectivity error: {response.status_code}.")
-            if response.status_code == 200 and not posted_connected_message:
+            if response.status_code == 200 and not global_heartbeat_active:
                 logger.log(f"Connected to commander: {response.status_code}.")
-                posted_connected_message = True
+                global_heartbeat_active = True
 
         except Exception as e:
             global_heartbeat_active = False
