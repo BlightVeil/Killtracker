@@ -47,6 +47,9 @@ global_game_mode = "Nothing"
 global_active_ship = "N/A"
 global_active_ship_id = "N/A"
 global_player_geid = "N/A"
+global_heartbeat_active = False
+global_rsi_handle = ""
+
 
 global_ship_list = [
     'DRAK', 'ORIG', 'AEGS', 'ANVL', 'CRUS', 'BANU', 'MISC',
@@ -185,6 +188,9 @@ def check_exclusion_scenarios(line, logger):
 
 
 def post_heartbeat(rsi_handle, logger):
+    global global_heartbeat_active
+    global_heartbeat_active = True
+    posted_connected_message = False
     while True:
         time.sleep(5)
         global global_active_ship
@@ -195,12 +201,12 @@ def post_heartbeat(rsi_handle, logger):
             'player': rsi_handle,
             'victim': "N/A",
             'time': "N/A",
-            'zone': "N/A",
+            'zone': global_active_ship,
             'weapon': "N/A",
             'rsi_profile': "N/A",
             'game_mode': "N/A",
             'client_ver': "7.0",
-            'killers_ship': global_active_ship,
+            'killers_ship': "N/A",
         }
 
         heartbeat_url = "http://38.46.216.78:25966/validateKey"
@@ -210,7 +216,8 @@ def post_heartbeat(rsi_handle, logger):
         }
 
         if not api_key["value"]:
-            logger.log("Kill event will not be sent. Enter valid key to establish connection with Servitor...")
+            logger.log("Heartbeat will not be sent. Enter valid key to establish connection with Servitor...")
+            global_heartbeat_active = False
             return
 
         # Send heartbeat to Servitor. Should never reach this until API key is already validated.
@@ -218,10 +225,69 @@ def post_heartbeat(rsi_handle, logger):
             response = requests.post(heartbeat_url, headers=headers, data=json.dumps(json_data), timeout=5)
             # logger.log(f"Server responded with status code: {response.status_code}")
             if response.status_code != 200:
-                logger.log(f"Servitor connectivity error: {response.status_code}.")
+                logger.log(f"Commander connectivity error: {response.status_code}.")
+            if response.status_code == 200 and not posted_connected_message:
+                logger.log(f"Connected to commander: {response.status_code}.")
+                posted_connected_message = True
+
         except Exception as e:
+            global_heartbeat_active = False
             logger.log(f"Error connecting to Servitor: {e}")
-            # TODO: Kill client !? Or just stop heartbeat thread
+            return
+
+
+def post_heartbeat_death_event(target_name, killed_zone, logger):
+    """Currently only support death events from the player!"""
+    json_data = {
+        'is_heartbeat': True,
+        'player': target_name,
+        'zone': killed_zone,
+        'client_ver': "7.0",
+        'status': "dead",  # Report status as 'dead'
+    }
+
+    headers = {
+        'content-type': 'application/json',
+        'Authorization': api_key["value"] if api_key["value"] else ""
+    }
+
+    try:
+        response = requests.post(
+            "http://38.46.216.78:25966/validateKey",
+            headers=headers,
+            data=json.dumps(json_data),
+            timeout=5
+        )
+        if response.status_code != 200:
+            logger.log(f"Failed to report death event: {response.status_code}.")
+    except Exception as e:
+        logger.log(f"Error reporting death event: {e}")
+
+
+def post_kill_event(json_data, logger):
+    headers = {
+        'content-type': 'application/json',
+        'Authorization': api_key["value"] if api_key["value"] else ""
+    }
+    if not api_key["value"]:
+        logger.log("Kill event will not be sent. Enter valid key to establish connection with Servitor...")
+        return
+
+    try:
+        response = requests.post(
+            "http://38.46.216.78:25966/reportKill",
+            headers=headers,
+            data=json.dumps(json_data)
+        )
+        if response.status_code == 200:
+            logger.log("and brought glory to the Veil.")
+        else:
+            logger.log(f"Servitor connectivity error: {response.status_code}.")
+            logger.log("Relaunch BV Kill Tracker and reconnect with a new Key.")
+    except Exception as e:
+        show_loading_animation(logger, app)
+        logger.log(f"Kill event will not be sent. Enter valid key to establish connection with Servitor...")
+
 
 def parse_kill_line(line, target_name, logger):
     """
@@ -247,35 +313,10 @@ def parse_kill_line(line, target_name, logger):
         # Log a message for the player's own death
         show_loading_animation(logger, app)
         logger.log("You have fallen in the service of BlightVeil.")
-        
-        # Update the player's status to dead
-        player_status = "dead"
 
         # Send death-event to the server via heartbeat
-        json_data = {
-            'is_heartbeat': True,
-            'player': target_name,
-            'zone': killed_zone,
-            'client_ver': "7.0",
-            'status': player_status,  # Report status as 'dead'
-        }
-        headers = {
-            'content-type': 'application/json',
-            'Authorization': api_key["value"] if api_key["value"] else ""
-        }
-
-        try:
-            response = requests.post(
-                "http://38.46.216.78:25966/validateKey",
-                headers=headers,
-                data=json.dumps(json_data),
-                timeout=5
-            )
-            if response.status_code != 200:
-                logger.log(f"Failed to report death event: {response.status_code}.")
-        except Exception as e:
-            logger.log(f"Error reporting death event: {e}")
-
+        post_heartbeat_death_event(target_name, killed_zone, logger)
+        destroy_player_zone(line, logger)
         return
 
     # Log a custom message for a successful kill
@@ -296,30 +337,8 @@ def parse_kill_line(line, target_name, logger):
         'client_ver': "7.0",
         'killers_ship': global_active_ship,
     }
+    post_kill_event(json_data, logger)
 
-    headers = {
-        'content-type': 'application/json',
-        'Authorization': api_key["value"] if api_key["value"] else ""
-    }
-
-    if not api_key["value"]:
-        logger.log("Kill event will not be sent. Enter valid key to establish connection with Servitor...")
-        return
-
-    try:
-        response = requests.post(
-            "http://38.46.216.78:25966/reportKill",
-            headers=headers,
-            data=json.dumps(json_data)
-        )
-        if response.status_code == 200:
-            logger.log("and brought glory to the Veil.")
-        else:
-            logger.log(f"Servitor connectivity error: {response.status_code}.")
-            logger.log("Relaunch BV Kill Tracker and reconnect with a new Key.")
-    except Exception as e:
-        show_loading_animation(logger, app)
-        logger.log(f"Kill event will not be sent. Enter valid key to establish connection with Servitor...")
 
 def read_existing_log(log_file_location, rsi_handle):
     sc_log = open(log_file_location, "r")
@@ -354,6 +373,7 @@ def find_rsi_geid(log_file_location):
             print("Player geid: " + global_player_geid)
             return
 
+
 def set_game_mode(line, logger):
     global global_game_mode
     global global_active_ship
@@ -366,6 +386,31 @@ def set_game_mode(line, logger):
     if "SC_Default" == global_game_mode:
         global_active_ship = "N/A"
         global_active_ship_id = "N/A"
+
+
+def verify_key_with_heartbeat(entered_key):
+    # Prepare the request
+    heartbeat_url = "http://38.46.216.78:25966/validateKey"
+    headers = {
+        'content-type': 'application/json',
+        'Authorization': entered_key,
+    }
+
+    # Send heartbeat to Servitor
+    try:
+        response = requests.post(heartbeat_url, headers=headers, timeout=5)
+        if response.status_code == 200:
+            response_data = response.json()
+            if response_data.get("status") == "valid":
+                api_key["value"] = entered_key
+                logger.log("Servitor Connection Established.")
+                logger.log("Go forth and KILL...")
+            else:
+                logger.log("Invalid key. Please input a valid key to establish connection with Servitor.")
+        else:
+            logger.log(f"Servitor connectivity error: {response.status_code}.")
+    except Exception as e:
+        logger.log(f"Error connecting to Servitor: {e}")
 
 
 def load_existing_key(app, logger):
@@ -385,29 +430,8 @@ def load_existing_key(app, logger):
                     app.update_idletasks()
                     time.sleep(0.5)
                     logger.log("...")
+                    verify_key_with_heartbeat(entered_key)
 
-                    # Prepare the request
-                    heartbeat_url = "http://38.46.216.78:25966/validateKey"
-                    headers = {
-                        'content-type': 'application/json',
-                        'Authorization': entered_key,
-                    }
-
-                    # Send heartbeat to Servitor
-                    try:
-                        response = requests.post(heartbeat_url, headers=headers, timeout=5)
-                        if response.status_code == 200:
-                            response_data = response.json()
-                            if response_data.get("status") == "valid":
-                                api_key["value"] = entered_key
-                                logger.log("Servitor Connection Established.")
-                                logger.log("Go forth and KILL...")
-                            else:
-                                logger.log("Invalid key. Please input a valid key to establish connection with Servitor.")
-                        else:
-                            logger.log(f"Servitor connectivity error: {response.status_code}.")
-                    except Exception as e:
-                        logger.log(f"Error connecting to Servitor: {e}")
                 else:
                     logger.log("Error: No key detected in file. Input valid key to establish connection with Servitor.")
         except Exception as e:
@@ -431,33 +455,10 @@ def activate_key(app, key_entry, logger):
             app.update_idletasks()
             time.sleep(0.5)
             logger.log("...")
+            verify_key_with_heartbeat(entered_key)
+            f = open("killtracker_key.cfg", "w")
+            f.write(entered_key)
 
-            # Prepare heartbeat payload
-            heartbeat_url = "http://38.46.216.78:25966/validateKey"
-            headers = {
-                'content-type': 'application/json',
-                'Authorization': entered_key  # Send the key in the header
-            }
-
-            # Send heartbeat to Servitor
-            try:
-                response = requests.post(heartbeat_url, headers=headers, timeout=5)
-                if response.status_code == 200:
-                    response_data = response.json()
-                    if response_data.get("status") == "valid":
-                        api_key["value"] = entered_key
-                        logger.log("Servitor Connection Established.")
-                        logger.log("Go forth and KILL...")
-                        
-                        # Save the key locally
-                        with open("killtracker_key.cfg", "w") as f:
-                            f.write(entered_key)
-                    else:
-                        logger.log("Invalid key. Please enter a valid key to establish connection with Servitor.")
-                else:
-                    logger.log(f"Servitor connectivity error: {response.status_code}.")
-            except Exception as e:
-                logger.log(f"Error connecting to Servitor: {e}")
         else:
             logger.log("Error: No key detected. Input valid key to establish connection with Servitor.")
     except Exception as e:
@@ -503,6 +504,16 @@ def setup_game_running_gui(app):
         fg="#ffffff",
     )
     load_key_button.pack(side=tk.LEFT, padx=(5, 0))
+
+    start_hearbeat_button = tk.Button(
+        key_frame,
+        text="Connect to Commander",
+        font=("Times New Roman", 12),
+        command=lambda: start_heartbeat_thread(logger),  # Pass logger here
+        bg="#000000",
+        fg="#ffffff",
+    )
+    start_hearbeat_button.pack(side=tk.LEFT, padx=(5, 0))
 
     # Commander Mode Button
     commander_mode_button = tk.Button(
@@ -791,11 +802,16 @@ def start_tail_log_thread(log_file_location, rsi_handle, logger):
     thread.start()
 
 
-def start_heartbeat_thread(rsi_handle, logger):
+def start_heartbeat_thread(logger):
     """Start the heartbeat in a seperate thread"""
-    thread = threading.Thread(target=post_heartbeat, args=(rsi_handle, logger))
+    global global_rsi_handle
+    global global_heartbeat_active
+    if global_heartbeat_active:
+        logger.log("Already connected to commander!")
+        return
+    logger.log("Connecting to commander...")
+    thread = threading.Thread(target=post_heartbeat, args=(global_rsi_handle, logger))
     thread.daemon = True
-    logger.log("Initializing Command Mode...")
     thread.start()
 
 
@@ -831,9 +847,10 @@ if __name__ == '__main__':
         # Start log monitoring in a separate thread
         log_file_location = set_sc_log_location()
         if log_file_location:
-            rsi_handlersi_handle = find_rsi_handle(log_file_location)
-            if rsi_handlersi_handle:
-                start_tail_log_thread(log_file_location, rsi_handlersi_handle, logger)
+            rsi_handle = find_rsi_handle(log_file_location)
+            if rsi_handle:
+                global_rsi_handle = rsi_handle
+                start_tail_log_thread(log_file_location, rsi_handle, logger)
     
     # Initiate auto-shutdown after 72 hours (72 * 60 * 60 seconds)
     if logger:
