@@ -776,11 +776,6 @@ def open_commander_mode(logger):
 def read_log_line(line, rsi_handle, upload_kills, logger):
     if -1 != line.find("<Context Establisher Done>"):
         set_game_mode(line, logger)
-    elif -1 != line.find(rsi_handle):
-        if -1 != line.find("OnEntityEnterZone"):
-            set_player_zone(line, logger)
-        if -1 != line.find("CActor::Kill") and not check_substring_list(line, ignore_kill_substrings) and upload_kills:
-            parse_kill_line(line, rsi_handle, logger)
     elif -1 != line.find("CPlayerShipRespawnManager::OnVehicleSpawned") and (
             "SC_Default" != global_game_mode) and (-1 != line.find(global_player_geid)):
         set_ac_ship(line, logger)
@@ -788,6 +783,11 @@ def read_log_line(line, rsi_handle, upload_kills, logger):
             -1 != line.find("<local client>: Entering control state dead"))) and (
             -1 != line.find(global_active_ship_id)):
         destroy_player_zone(line, logger)
+    elif -1 != line.find(rsi_handle):
+        if -1 != line.find("OnEntityEnterZone"):
+            set_player_zone(line, logger)
+        if -1 != line.find("CActor::Kill") and not check_substring_list(line, ignore_kill_substrings) and upload_kills:
+            parse_kill_line(line, rsi_handle, logger)
 
 
 def tail_log(log_file_location, rsi_handle, logger):
@@ -877,6 +877,7 @@ if __name__ == '__main__':
         log_file_location = set_sc_log_location()
         if log_file_location:
             rsi_handle = find_rsi_handle(log_file_location)
+            find_rsi_geid(log_file_location)
             if rsi_handle:
                 global_rsi_handle = rsi_handle
                 start_tail_log_thread(log_file_location, rsi_handle, logger)
