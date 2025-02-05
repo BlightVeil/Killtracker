@@ -500,7 +500,7 @@ def parse_kill_line(line, target_name, logger):
     # Send the kill event data to the server
     post_kill_event(json_data, logger)
 
-def read_existing_log(log_file_location, rsi_handle):
+def read_existing_log(log_file_location, rsi_handle, logger):
     sc_log = open(log_file_location, "r")
     lines = sc_log.readlines()
     for line in lines:
@@ -520,7 +520,7 @@ def find_rsi_handle(log_file_location, logger):
                             logger.error("RSI_HANDLE: Not Found in the line!")
                             return None  # Return None instead of exiting
                         
-                        potential_handle = line[line_index:].split(' ')[0].strip()  # Stripping any excess whitespace
+                        potential_handle = line[line_index:].split(' ')[0].strip()[:-1]  # Stripping any excess whitespace
                         logger.info(f"Found RSI_HANDLE: {potential_handle}")
                         return potential_handle
                     except ValueError as e:
@@ -584,9 +584,11 @@ def set_game_mode(line, logger):
     except Exception as e:
         logger.error(f"Unexpected error in set_game_mode: {e}")
 
-def load_existing_key(app, key_entry, logger, status_label):
+def load_existing_key(app, logger, status_label):
     try:
-        entered_key = key_entry.get().strip()
+        f = open("killtracker_key.cfg", "r")
+        entered_key = f.readline()
+
         if entered_key:
             logger.info("Activating key")
             show_loading_animation(logger, app)
@@ -643,11 +645,6 @@ def load_existing_key(app, key_entry, logger, status_label):
             except requests.exceptions.RequestException as e:
                 logger.error(f"Request error: {e}")
                 status_label.config(text="Connection Error", bg="red")
-
-            # Save the entered key to the config file
-            with open("killtracker_key.cfg", "w") as f:
-                f.write(entered_key)
-            logger.info("API key saved successfully.")
 
         else:
             logger.warning("Error: No key detected. Input a valid key to establish connection with Servitor.")
@@ -777,7 +774,7 @@ def setup_game_running_gui(app):
         key_frame,
         text="Load Existing Key",
         font=("Times New Roman", 12),
-        command=lambda: load_existing_key(app, key_entry, logger, status_label),
+        command=lambda: load_existing_key(app, logger, status_label),
         bg="#000000",
         fg="#ffffff",
     )
@@ -1039,6 +1036,8 @@ def open_commander_mode(logger):
     
 # Event checking logic. Look for substrings, do stuff based on what we find.
 def read_log_line(line, rsi_handle, upload_kills, logger):
+    if (-1 != line.find("CActor::Kill:")):
+        print(" break")
     if -1 != line.find("<Context Establisher Done>"):
         set_game_mode(line, logger)
     elif -1 != line.find("CPlayerShipRespawnManager::OnVehicleSpawned") and (
@@ -1049,11 +1048,12 @@ def read_log_line(line, rsi_handle, upload_kills, logger):
             -1 != line.find(global_active_ship_id)):
         destroy_player_zone(line, logger)
     elif -1 != line.find(rsi_handle):
+        logger.debug(f"Handle Mention: {line.strip()}")
         if -1 != line.find("OnEntityEnterZone"):
             active_zone_label = tk.Label(app, text="Active Zone: Unknown", font=("Consolas", 12))
             active_zone_label.pack(pady=10)
             set_player_zone(line, logger, active_zone_label,)
-        if -1 != line.find("CActor::Kill") and not check_substring_list(line, ignore_kill_substrings, logger) and upload_kills:
+        if (-1 != line.find("CActor::Kill:")):
             parse_kill_line(line, rsi_handle, logger)
 
 def tail_log(log_file_location, rsi_handle, logger):
@@ -1103,7 +1103,7 @@ def tail_log(log_file_location, rsi_handle, logger):
                     logger.debug(f"Log file reopened. New file size: {current_log_file_size} bytes.")
             else:
                 # Process new log line and pass it to the relevant handler
-                logger.debug(f"New log line: {line.strip()}")
+                # logger.debug(f"New log line: {line.strip()}")
                 read_log_line(line, rsi_handle, True, logger)
 
         except Exception as e:
