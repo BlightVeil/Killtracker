@@ -113,7 +113,7 @@ def show_loading_animation(logger, app):
     logger.debug("Starting loading animation...")  # Debug log when the animation starts
 
     for dots in [".","..", "..."]:
-        logger.log(dots)  # Log each dot set
+        logger.log(f"{dots}")  # Log each dot set
         logger.debug(f"Animating: {dots}")  # Debug log for each animation step
         app.update_idletasks()  # Ensure the UI stays responsive
         time.sleep(0.2)  # Sleep briefly before updating the animation
@@ -478,7 +478,7 @@ def parse_kill_line(line, target_name, logger):
     logger.debug(f"Player {target_name} has killed {killed}. Weapon: {weapon}")
 
     # Log a custom message for a successful kill
-    show_loading_animation(logger, app)
+    #show_loading_animation(logger, app)
     event_message = f"You have killed {killed} in zone {killed_zone} with {weapon}."
     logger.info(event_message)
 
@@ -501,6 +501,9 @@ def parse_kill_line(line, target_name, logger):
     post_kill_event(json_data, logger)
 
 def read_existing_log(log_file_location, rsi_handle, logger):
+    f = open("killtracker_key.cfg", "r")
+    entered_key = f.readline()
+    api_key["value"] = entered_key
     sc_log = open(log_file_location, "r")
     lines = sc_log.readlines()
     for line in lines:
@@ -1053,7 +1056,7 @@ def read_log_line(line, rsi_handle, upload_kills, logger):
             active_zone_label = tk.Label(app, text="Active Zone: Unknown", font=("Consolas", 12))
             active_zone_label.pack(pady=10)
             set_player_zone(line, logger, active_zone_label,)
-        if (-1 != line.find("CActor::Kill:")):
+        if (-1 != line.find("CActor::Kill:")) and not check_substring_list(line, ignore_kill_substrings, logger) and upload_kills:
             parse_kill_line(line, rsi_handle, logger)
 
 def tail_log(log_file_location, rsi_handle, logger):
@@ -1168,6 +1171,7 @@ if __name__ == '__main__':
             find_rsi_geid(log_file_location, logger)
             if rsi_handle:
                 global_rsi_handle = rsi_handle
+                # read_existing_log(log_file_location, rsi_handle, logger)
                 start_tail_log_thread(log_file_location, rsi_handle, logger)
     
     # Initiate auto-shutdown after 72 hours (72 * 60 * 60 seconds)
