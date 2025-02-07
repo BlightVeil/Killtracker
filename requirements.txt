@@ -5,5 +5,4 @@
 
 psutil
 requests
-tkinter
 packaging
