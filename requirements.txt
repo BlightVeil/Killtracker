@@ -3,7 +3,7 @@
 # tkinter (GUI library, included with most Python distributions)
 # tkinter.font and tkinter.scrolledtext (also part of tkinter)
 
-psutil  
-requests  
-packaging  
-tk
+psutil
+requests
+tkinter
+packaging
