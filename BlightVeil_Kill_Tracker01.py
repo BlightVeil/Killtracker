@@ -1,17 +1,18 @@
 import os
 import json
+import sys
+import time
 import psutil
 import requests
 import threading
 import tkinter as tk
+from datetime import datetime, timedelta
 from tkinter import scrolledtext
 from tkinter.font import Font
 from tkinter import messagebox
-import sys
 from packaging import version
-import time
 
-local_version = "1.0"
+local_version = "1.1"
 api_key = {"value": None}
 
 def resource_path(relative_path):
@@ -70,7 +71,6 @@ def show_loading_animation(logger, app):
         app.update_idletasks()
         time.sleep(0.2)
 
-
 def destroy_player_zone(line, logger):
     global global_active_ship
     global global_active_ship_id
@@ -79,12 +79,10 @@ def destroy_player_zone(line, logger):
         global_active_ship = "N/A"
         global_active_ship_id = "N/A"
 
-
 def set_ac_ship(line, logger):
     global global_active_ship
     global_active_ship = line.split(' ')[5][1:-1]
     print("Player has entered ship: ", global_active_ship)
-
 
 def set_player_zone(line, logger):
     global global_active_ship
@@ -103,14 +101,12 @@ def set_player_zone(line, logger):
             print(f"Active Zone Change: {global_active_ship} with ID: {global_active_ship_id}")
             return
 
-
 def check_if_process_running(process_name):
     """ Check if a process is running by name. """
     for proc in psutil.process_iter(['pid', 'name', 'exe']):
         if process_name.lower() in proc.info['name'].lower():
             return proc.info['exe']
     return None
-
 
 def find_game_log_in_directory(directory):
     """ Search for Game.log in the directory and its parent directory. """
@@ -125,7 +121,6 @@ def find_game_log_in_directory(directory):
         print(f"Found Game.log in parent directory: {parent_directory}")
         return game_log_path
     return None
-
 
 def set_sc_log_location():
     """ Check for RSI Launcher and Star Citizen Launcher, and set SC_LOG_LOCATION accordingly. """
@@ -182,8 +177,6 @@ def check_exclusion_scenarios(line, logger):
         print("Probably a ship reset, ignoring kill!")
         return False
     return True
-
-
 
 def parse_kill_line(line, target_name, logger):
     if not check_exclusion_scenarios(line, logger):
@@ -245,13 +238,11 @@ def parse_kill_line(line, target_name, logger):
         show_loading_animation(logger, app)
         logger.log(f"Kill event will not be sent. Enter valid key to establish connection with Servitor...")
 
-
 def read_existing_log(log_file_location, rsi_name):
     sc_log = open(log_file_location, "r")
     lines = sc_log.readlines()
     for line in lines:
         read_log_line(line, rsi_name, True, logger)
-
 
 def find_rsi_handle(log_file_location):
     acct_str = "<Legacy login response> [CIG-net] User Login Success"
@@ -266,7 +257,6 @@ def find_rsi_handle(log_file_location):
             potential_handle = line[line_index:].split(' ')[0]
             return potential_handle[0:-1]
     return None
-
 
 def find_rsi_geid(log_file_location):
     global global_player_geid
@@ -292,13 +282,12 @@ def set_game_mode(line, logger):
         global_active_ship = "N/A"
         global_active_ship_id = "N/A"
 
-
 def setup_gui(game_running):
     app = tk.Tk()
     app.title("BlightVeil Kill Tracker")
     app.geometry("800x800")
-    app.configure(bg="#484759") 
-
+    app.configure(bg="#484759")
+    
     # Set the icon
     try:
         icon_path = resource_path("BlightVeil.ico")
@@ -358,49 +347,57 @@ def setup_gui(game_running):
         key_entry = tk.Entry(key_frame, width=30, font=("Times New Roman", 12))
         key_entry.pack(side=tk.LEFT)
 
-        # Check for API Key file
+        # Label for remaining time display
+        remaining_time_label = tk.Label(
+            app, text="", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+        )
+        remaining_time_label.pack(pady=(10, 10))
+
+        # Load Existing Key and Expiry Check
         def load_existing_key():
             if os.path.exists("killtracker_key.cfg"):
                 try:
-                    f = open("killtracker_key.cfg", "r")
-                    entered_key = f.readline()
-                    if entered_key:
-                        logger.log("Activating key...")
-                        show_loading_animation(logger, app)
-                        logger.log("Establishing Servitor Connection...")
-                        logger.log(".")
-                        app.update_idletasks()
-                        time.sleep(0.5)
-                        logger.log("..")
-                        app.update_idletasks()
-                        time.sleep(0.5)
-                        logger.log("...")
-                        app.update_idletasks()
-                        time.sleep(0.5)
+                    with open("killtracker_key.cfg", "r") as f:
+                        data = json.load(f)
+                        entered_key = data.get("key")
+                        expiry_time_str = data.get("expiry_time")
 
-                        # Set and log key activation
-                        api_key["value"] = entered_key
-                        logger.log("Servitor Connection Established.")
-                        logger.log("Go forth and slaughter...")
-                    else:
-                        logger.log("Error: No key detected. Input valid key to establish connection with Servitor.")
+                        if entered_key and expiry_time_str:
+                            expiry_time = datetime.strptime(expiry_time_str, "%Y-%m-%d %H:%M:%S")
+                            current_time = datetime.now()
+
+                            if current_time < expiry_time:
+                                logger.log("Activating key...")
+                                show_loading_animation(logger, app)
+                                logger.log("Establishing Servitor Connection...")
+                                app.update_idletasks()
+                                time.sleep(0.5)
+
+                                # Set and log key activation
+                                api_key["value"] = entered_key
+                                logger.log("Servitor Connection Established.")
+                                logger.log("Go forth and slaughter...")
+
+                                # Update remaining time display
+                                update_remaining_time(expiry_time)
+                            else:
+                                logger.log("Error: API Key has expired. Please enter a new key.")
+                        else:
+                            logger.log("Error: Invalid key or expiry time detected.")
                 except Exception as e:
-                    logger.log(f"Error in activate_key: {e}")
+                    logger.log(f"Error loading key from file: {e}")
 
         def activate_key():
             try:
                 entered_key = key_entry.get().strip()
                 if entered_key:
+                    # Set expiration time to 72 hours
+                    expiry_time = datetime.now() + timedelta(hours=72)
+                    expiry_time_str = expiry_time.strftime("%Y-%m-%d %H:%M:%S")
+
                     logger.log("Activating key...")
                     show_loading_animation(logger, app)
                     logger.log("Establishing Servitor Connection...")
-                    logger.log(".")
-                    app.update_idletasks()  
-                    time.sleep(0.5)  
-                    logger.log("..")
-                    app.update_idletasks()
-                    time.sleep(0.5)
-                    logger.log("...")
                     app.update_idletasks()
                     time.sleep(0.5)
 
@@ -408,12 +405,45 @@ def setup_gui(game_running):
                     api_key["value"] = entered_key
                     logger.log("Servitor Connection Established.")
                     logger.log("Go forth and slaughter...")
-                    f = open("killtracker_key.cfg", "w")
-                    f.write(entered_key)
+
+                    # Save key and expiry time to file
+                    with open("killtracker_key.cfg", "w") as f:
+                        json.dump({"key": entered_key, "expiry_time": expiry_time_str}, f)
+
+                    # Update remaining time display
+                    update_remaining_time(expiry_time)
                 else:
                     logger.log("Error: No key detected. Input valid key to establish connection with Servitor.")
             except Exception as e:
                 logger.log(f"Error in activate_key: {e}")
+
+        def update_remaining_time(expiry_time):
+            def countdown():
+                current_time = datetime.now()
+                remaining_time = expiry_time - current_time
+                if remaining_time.total_seconds() > 0:
+                    # Calculate hours, minutes, and seconds from remaining_time
+                    remaining_days = remaining_time.days
+                    remaining_seconds = remaining_time.total_seconds()
+
+                    remaining_hours = int(remaining_seconds // 3600)  # Calculate hours
+                    remaining_minutes = int((remaining_seconds % 3600) // 60)  # Calculate minutes
+                    remaining_seconds = int(remaining_seconds % 60)  # Remaining seconds
+
+                    # Check if there are days remaining
+                    if remaining_days > 0:
+                        remaining_time_str = f"{remaining_days} days {remaining_hours:02}:{remaining_minutes:02}:{remaining_seconds:02}"
+                    else:
+                        remaining_time_str = f"{remaining_hours:02}:{remaining_minutes:02}:{remaining_seconds:02}"
+
+                    remaining_time_label.config(text=f"API Key Remaining: {remaining_time_str}")
+                    # Schedule the function to update every 1000 ms (1 second)
+                    app.after(1000, countdown)  # 1000 ms = 1 second
+                else:
+                    remaining_time_label.config(text="API Key has expired.")
+            
+            countdown()  # Start the countdown immediately
+
 
         activate_button = tk.Button(
             key_frame,
@@ -471,7 +501,6 @@ def setup_gui(game_running):
 
     return app, logger
 
-
 # Event checking logic. Look for substrings, do stuff based on what we find.
 def read_log_line(line, rsi_name, upload_kills, logger):
     if -1 != line.find("<Context Establisher Done>"):
@@ -488,7 +517,6 @@ def read_log_line(line, rsi_name, upload_kills, logger):
             -1 != line.find("<local client>: Entering control state dead"))) and (
             -1 != line.find(global_active_ship_id)):
         destroy_player_zone(line, logger)
-
 
 def tail_log(log_file_location, rsi_name, logger):
     """Read the log file and display events in the GUI."""
@@ -523,18 +551,15 @@ def tail_log(log_file_location, rsi_name, logger):
         else:
             read_log_line(line, rsi_name, True, logger)
 
-
 def start_tail_log_thread(log_file_location, rsi_name, logger):
     """Start the log tailing in a separate thread."""
     thread = threading.Thread(target=tail_log, args=(log_file_location, rsi_name, logger))
     thread.daemon = True
     thread.start()
 
-
 def is_game_running():
     """Check if Star Citizen is running."""
     return check_if_process_running("StarCitizen") is not None
-
 
 def auto_shutdown(app, delay_in_seconds, logger=None):
     def shutdown():
@@ -552,7 +577,6 @@ def auto_shutdown(app, delay_in_seconds, logger=None):
     # Run the shutdown logic in a separate thread
     shutdown_thread = threading.Thread(target=shutdown, daemon=True)
     shutdown_thread.start()
-
 
 if __name__ == '__main__':
     game_running = is_game_running()
