@@ -537,28 +537,61 @@ def setup_gui(game_running):
 
 def start_api_key_countdown(api_key, api_status_label):
     """
-    Function to start the countdown for the API key's expiration.
+    Function to start the countdown for the API key's expiration, refreshing expiry data periodically.
     """
-    expiration_time = get_api_key_expiration_time(api_key)  # Assuming you have a function that returns the expiration time as a datetime object
-
     def update_countdown():
-        remaining_time = expiration_time - datetime.datetime.now()
-        if remaining_time.total_seconds() > 0:
-            countdown_text = f"API Status: Valid (Expires in {str(remaining_time).split('.')[0]})"
-            api_status_label.config(text=countdown_text, fg="green")
-            api_status_label.after(1000, update_countdown)  # Update every second
-        else:
+        expiration_time = get_api_key_expiration_time(api_key)  # Fetch latest expiration time
+        if not expiration_time:
             api_status_label.config(text="API Status: Expired", fg="red")
+            return
+
+        def countdown():
+            remaining_time = expiration_time - datetime.datetime.utcnow()
+            if remaining_time.total_seconds() > 0:
+                hours, remainder = divmod(remaining_time.seconds, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                countdown_text = f"API Status: Valid (Expires in {remaining_time.days}d {hours}h {minutes}m {seconds}s)"
+                api_status_label.config(text=countdown_text, fg="green")
+                api_status_label.after(1000, countdown)  # Update every second
+            else:
+                api_status_label.config(text="API Status: Expired", fg="red")
+
+        countdown()
+
+        # Refresh expiration time every 60 seconds to stay in sync with the server
+        api_status_label.after(60000, update_countdown)
 
     update_countdown()
 
 def get_api_key_expiration_time(api_key):
     """
-    Retrieve the expiration time for the API key from the database or elsewhere.
+    Retrieve the expiration time for the API key from the validation server.
     """
-    # Example: Fetch the expiration time from your database or API
-    expiration_time = datetime.datetime(2025, 2, 10, 23, 48, 59)  # Example fixed date
-    return expiration_time
+    url = "http://38.46.216.78:25966/validateKey"
+    headers = {
+        "Authorization": api_key,
+        "Content-Type": "application/json"
+    }
+    data = {
+        "player_name": rsi_handle
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 200:
+            response_data = response.json()
+            expiration_time_str = response_data.get("expires_at")
+            if expiration_time_str:
+                return datetime.datetime.strptime(expiration_time_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+            else:
+                print("Error: 'expires_at' not found in response")
+        else:
+            print("Error fetching expiration time:", response.json().get("error", "Unknown error"))
+    except requests.RequestException as e:
+        print(f"API request error: {e}")
+
+    # Fallback: Expire immediately if there's an error
+    return None
 
 def read_log_line(line, rsi_name, upload_kills, logger):
     if -1 != line.find("<Context Establisher Done>"):
