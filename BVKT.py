@@ -13,7 +13,7 @@ from packaging import version
 import time
 import datetime
 
-local_version = "1.0"
+local_version = "1.1"
 api_key = {"value": None}
 
 global_game_mode = "Nothing"
@@ -284,7 +284,7 @@ def parse_kill_line(line, target_name, logger):
         'weapon': weapon,
         'rsi_profile': f"https://robertsspaceindustries.com/citizens/{killed}",
         'game_mode': global_game_mode,
-        'client_ver': "7.0",
+        'client_ver': "1.1",
         'killers_ship': global_active_ship,
     }
 
