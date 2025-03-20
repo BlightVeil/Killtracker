@@ -809,6 +809,8 @@ def open_commander_mode(logger):
             player_name = item_text.split(" - ")[0]
             user = next((user for user in active_users if user['player'] == player_name), None)
             if user:
+                allocated_forces_listbox.delete(index)
+                allocated_forces_listbox.insert(index, f"{user['player']} - Zone: {user['zone']}")
                 # Change text color based on status
                 if user['status'] == "dead":
                     allocated_forces_listbox.itemconfig(index, {'fg': 'red'})
@@ -925,7 +927,7 @@ def post_heartbeat(rsi_handle, logger):
         time.sleep(5)
 
         # Determine status based on the active ship
-        status = "alive" if global_active_ship and global_active_ship != "N/A" else "dead"
+        status = "alive" if global_active_ship != "N/A" else "dead"
 
         json_data = {
             'is_heartbeat': True,
@@ -942,12 +944,12 @@ def post_heartbeat(rsi_handle, logger):
             return
 
         try:
-            #logger.log(f"Sending heartbeat: {json_data}")
+            # logger.log(f"Sending heartbeat: {json_data}")
             response = requests.post(heartbeat_url, headers=headers, json=json_data, timeout=5)
             response.raise_for_status()  # Raises an exception for HTTP errors
 
             response_data = response.json()
-            #logger.log(f"Received response: {response_data}")
+            # logger.log(f"Received response: {response_data}")
 
             # Update the UI with active commanders if the response contains the key
             if 'commanders' in response_data:
