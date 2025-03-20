@@ -34,6 +34,7 @@ global_rsi_handle = ""
 anonymize_state = {"enabled": False}
 global_commander_heartbeat_active = False
 global_heartbeat_active = False
+global global_heartbeat_daemon
 update_queue = Queue()
 
 # Ensure external sounds folder exists before doing anything else
@@ -736,7 +737,7 @@ def open_commander_mode(logger):
         width=40,
         height=20,
         bg="#282a36",
-        fg="#00ff00",  # Default to green (alive)
+        fg="#ff0000",  # Default to red (dead)
         font=("Consolas", 12)
     )
     allocated_forces_listbox.pack(fill=tk.BOTH, expand=True)
@@ -744,13 +745,13 @@ def open_commander_mode(logger):
     # Add Button
     add_button = tk.Button(
         commander_window,
-        text=">>>",
+        text="Add to Fleet",
         font=("Times New Roman", 12),
         command=lambda: allocate_selected_users(),
         bg="#000000",
         fg="#ffffff",
     )
-    add_button.pack(pady=(0, 10))
+    add_button.pack(pady=(10, 10))
     
     start_hearbeat_button = tk.Button(
         commander_window,
@@ -760,18 +761,18 @@ def open_commander_mode(logger):
         bg="#000000",
         fg="#ffffff",
     )
-    start_hearbeat_button.pack(side=tk.LEFT, padx=(5, 0))
+    start_hearbeat_button.pack(pady=(10, 10))
 
     # Close Button
-    close_button = tk.Button(
+    dc_button = tk.Button(
         commander_window,
-        text="Close",
+        text="Disconnect",
         font=("Times New Roman", 12),
-        command=commander_window.destroy,
+        command=lambda:[stop_heartbeat_thread(logger), clear_listboxes()],
         bg="#000000",
         fg="#ffffff",
     )
-    close_button.pack(pady=(10, 10))
+    dc_button.pack(pady=(10, 10))
 
     # Search Functionality
     def search_users(*args):
@@ -791,6 +792,9 @@ def open_commander_mode(logger):
             # Find the full user info
             user_info = next((user for user in logger.connected_users if user['player'] == player_name), None)
             if user_info:
+                for allocated_user in allocated_forces_listbox.get(0, tk.END):
+                    if user_info['player'] in allocated_user:
+                        return
                 # Add to allocated forces
                 allocated_forces_listbox.insert(tk.END, f"{user_info['player']} - Zone: {user_info['zone']}")
 
@@ -842,6 +846,10 @@ def open_commander_mode(logger):
 
     # Assuming commander_window is your Tkinter window object
     commander_window.after(1000, check_for_updates)
+
+    def clear_listboxes():
+        connected_users_listbox.delete(0, tk.END)
+        allocated_forces_listbox.delete(0, tk.END)
 
 def post_heartbeat_death_event(target_name, killed_zone, logger):
     """Currently only support death events from the player!"""
@@ -911,8 +919,9 @@ def post_heartbeat(rsi_handle, logger):
         'content-type': 'application/json',
         'Authorization': api_key["value"] if api_key["value"] else ""
     }
+    global_heartbeat_active = True
 
-    while True:
+    while global_heartbeat_active:
         time.sleep(5)
 
         # Determine status based on the active ship
@@ -957,13 +966,23 @@ def start_heartbeat_thread(logger):
     """Start the heartbeat in a seperate thread"""
     global global_rsi_handle
     global global_heartbeat_active
+    global global_heartbeat_daemon
     if global_heartbeat_active:
         logger.log("Already connected to commander!")
         return
     logger.log("Connecting to commander...")
-    thread = threading.Thread(target=post_heartbeat, args=(global_rsi_handle, logger))
-    thread.daemon = True
-    thread.start()
+    global_heartbeat_daemon = threading.Thread(target=post_heartbeat, args=(global_rsi_handle, logger))
+    global_heartbeat_daemon.daemon = True
+    global_heartbeat_daemon.start()
+
+def stop_heartbeat_thread(logger):
+    global global_heartbeat_active
+    global global_heartbeat_daemon
+    if global_heartbeat_active:
+        logger.log("Flagging heartbeat to shut down")
+        global_heartbeat_active = False
+        global_heartbeat_daemon.join()
+        return
 
 #API Key Management
 def run_api_key_expiration_check(api_key):
