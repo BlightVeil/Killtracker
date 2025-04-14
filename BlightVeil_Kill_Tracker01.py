@@ -4,6 +4,7 @@ import json
 import time
 import psutil
 import shutil
+from pathlib import Path
 import random
 import winsound
 import datetime
@@ -17,9 +18,6 @@ from queue import Queue
 from packaging import version
 from tkinter import scrolledtext
 
-# Directory for sounds
-SOUNDS_FOLDER = "sounds"
-
 local_version = "1.3"
 api_key = {"value": None}
 stop_event = threading.Event()
@@ -32,10 +30,9 @@ anonymize_state = {"enabled": False}
 global_commander_heartbeat_active = False
 global_heartbeat_active = False
 global global_heartbeat_daemon
+global sounds_pyinst_dir
+global sounds_live_dir
 update_queue = Queue()
-
-# Ensure external sounds folder exists before doing anything else
-os.makedirs(SOUNDS_FOLDER, exist_ok=True)  # Cleaner way to create folder if missing
 
 global_ship_list = [
     'DRAK', 'ORIG', 'AEGS', 'ANVL', 'CRUS', 'BANU', 'MISC',
@@ -43,144 +40,13 @@ global_ship_list = [
     'GRIN', 'TMBL', 'GAMA'
 ]
 
-def resource_path(relative_path):
-    """ Get the absolute path to the resource (works for PyInstaller .exe and Nuitka .exe). """
-    try:
-        # When running in a frozen environment (compiled executable)
-        base_path = sys._MEIPASS  
-    except AttributeError:
-        # When running in a normal Python environment (source code)
-        base_path = os.path.abspath(".")  
-    return os.path.join(base_path, relative_path)
 
-# Folder where user places their sounds (next to the .exe when running a built version)
-EXTERNAL_SOUNDS_FOLDER = os.path.join(os.getcwd(), "sounds")
 
-SOUNDS_FOLDER = resource_path("sounds")
+#########################################################################################################
+### LOGGER CLASS                                                                                      ###
+#########################################################################################################
 
-# Ensure the external sounds folder exists before doing anything else
-os.makedirs(EXTERNAL_SOUNDS_FOLDER, exist_ok=True)
-os.makedirs(SOUNDS_FOLDER, exist_ok=True)
 
-def check_for_updates():
-    """Check for updates using the GitHub API."""
-    github_api_url = "https://api.github.com/repos/BlightVeil/Killtracker/releases/latest"
-
-    try:
-        headers = {'User-Agent': 'Killtracker/1.3'}
-        response = requests.get(github_api_url, headers=headers, timeout=5)
-
-        if response.status_code == 200:
-            release_data = response.json()
-            remote_version = release_data.get("tag_name", "v1.3").strip("v")
-            download_url = release_data.get("html_url", "")
-
-            if version.parse(local_version) < version.parse(remote_version):
-                return f"Update available: {remote_version}. Download it here: {download_url}"
-        else:
-            print(f"GitHub API error: {response.status_code}")
-    except Exception as e:
-        print(f"Error checking for updates: {e}")
-    return None
-
-def monitor_game_state(log_file_location, rsi_name, logger):
-    """ Continuously monitor the game state and manage log monitoring. """
-    last_state = None  # Track last known game state
-
-    while True:
-        game_running = is_game_running()
-
-        if game_running and last_state != True:  # Log only when transitioning to running
-            logger.log("Star Citizen is running. Ignore API Key if Status Is Green")
-            if not logger.is_monitoring:  # Ensure tailing thread is not running already
-                start_tail_log_thread(log_file_location, rsi_name, logger)
-                logger.is_monitoring = True
-
-        elif not game_running and last_state != False:  # Log only when transitioning to stopped
-            logger.log("Star Citizen has stopped. Pausing log monitoring...")
-            logger.is_monitoring = False
-
-        last_state = game_running  # Update last state
-        time.sleep(5)  # Check every 5 seconds
-
-def copy_sounds_to_target_folder():
-    # Determine the location of the resources, using the extraction folder if it's running from a bundled .exe
-    try:
-        base_path = sys._MEIPASS  # For PyInstaller bundles
-    except Exception:
-        base_path = os.path.abspath(".")  # If running from source
-
-    sounds_source = os.path.join(base_path, "sounds")
-    sounds_target = os.path.join(os.getcwd(), "sounds")  # Using the current working directory
-
-    # Ensure the target folder exists
-    if not os.path.exists(sounds_target):
-        os.makedirs(sounds_target)
-
-    # Get the current files in the target folder
-    existing_files = set(os.listdir(sounds_target))
-
-    # Copy only the new .wav files from the source to the target folder
-    try:
-        for sound_file in os.listdir(sounds_source):
-            if sound_file.endswith(".wav"):  # Filter for .wav files
-                if sound_file not in existing_files:  # Skip already existing files
-                    source_path = os.path.join(sounds_source, sound_file)
-                    target_path = os.path.join(sounds_target, sound_file)
-                    if os.path.isfile(source_path):
-                        shutil.copy(source_path, target_path)
-                        print(f"Copied new sound: {sound_file} to {sounds_target}")
-    except Exception as e:
-        print(f"Error copying sounds: {e}")        
-
-def copy_new_sounds():
-    """Copy any new files from the external sounds folder to the program's sounds folder."""
-    if not os.path.exists(EXTERNAL_SOUNDS_FOLDER):
-        print(f"External sounds folder not found: {EXTERNAL_SOUNDS_FOLDER}")
-        return
-
-    # Ensure the program's sounds folder exists
-    os.makedirs(SOUNDS_FOLDER, exist_ok=True)
-
-    # Get the list of existing files in the program's sounds folder
-    existing_files = set(os.listdir(SOUNDS_FOLDER))
-
-    try:
-        for sound_file in os.listdir(EXTERNAL_SOUNDS_FOLDER):
-            source_path = os.path.join(EXTERNAL_SOUNDS_FOLDER, sound_file)
-            target_path = os.path.join(SOUNDS_FOLDER, sound_file)
-
-            # Check if it's a file and if it's not already copied
-            if os.path.isfile(source_path) and sound_file not in existing_files:
-                shutil.copy(source_path, target_path)
-                print(f"Copied new sound: {sound_file} to {SOUNDS_FOLDER}")
-
-    except Exception as e:
-        print(f"Error copying sounds: {e}")
-
-def get_all_sounds():
-    """Fetch only .wav sounds from the sounds folder."""
-    if not os.path.exists(SOUNDS_FOLDER):
-        print("❌ Sounds folder not found!")
-        return []
-    
-    return [
-        os.path.join(SOUNDS_FOLDER, f) for f in os.listdir(SOUNDS_FOLDER) 
-        if f.endswith(".wav")
-    ]
-    
-def play_random_sound():
-    """Play a single random .wav file from the sounds folder."""
-    sounds = get_all_sounds()
-    if sounds:
-        sound_to_play = random.choice(sounds)  # Select a random sound
-        try:
-            logger.log(f"✅ Playing sound: {sound_to_play}")
-            winsound.PlaySound(sound_to_play, winsound.SND_FILENAME)  # Play the selected sound
-        except Exception as e:
-            print(f"⚠️ Error playing sound {sound_to_play}: {e}")
-    else:
-        print("❌ No .wav sound files found.")
 
 class EventLogger:
     def __init__(self, text_widget):
@@ -194,7 +60,15 @@ class EventLogger:
         self.text_widget.insert(tk.END, message + "\n")
         self.text_widget.config(state=tk.DISABLED)
         self.text_widget.see(tk.END)
-        
+
+
+
+#########################################################################################################
+### GAME LOG FUNCTIONS                                                                                ###
+#########################################################################################################
+
+
+
 def async_loading_animation(logger, app):
     def animate():
         for dots in [".", "..", "..."]:
@@ -237,58 +111,6 @@ def set_player_zone(line, logger):
             if global_heartbeat_active:
                 post_heartbeat_enter_ship_event(global_rsi_handle, global_active_ship, logger)
             return
-
-def check_if_process_running(process_name):
-    """ Check if a process is running by name. """
-    for proc in psutil.process_iter(['pid', 'name', 'exe']):
-        if process_name.lower() in proc.info['name'].lower():
-            return proc.info['exe']
-    return None
-
-def find_game_log_in_directory(directory):
-    """ Search for Game.log in the directory and its parent directory. """
-    game_log_path = os.path.join(directory, 'Game.log')
-    if os.path.exists(game_log_path):
-        print(f"Found Game.log in: {directory}")
-        return game_log_path
-    # If not found in the same directory, check the parent directory
-    parent_directory = os.path.dirname(directory)
-    game_log_path = os.path.join(parent_directory, 'Game.log')
-    if os.path.exists(game_log_path):
-        print(f"Found Game.log in parent directory: {parent_directory}")
-        return game_log_path
-    return None
-
-def set_sc_log_location():
-    """ Check for RSI Launcher and Star Citizen Launcher, and set SC_LOG_LOCATION accordingly. """
-    # Check if RSI Launcher is running
-    rsi_launcher_path = check_if_process_running("RSI Launcher")
-    if not rsi_launcher_path:
-        print("RSI Launcher not running.")
-        return None
-
-    print("RSI Launcher running at:", rsi_launcher_path)
-
-    # Check if Star Citizen Launcher is running
-    sc_launcher_path = check_if_process_running("StarCitizen")
-    if not sc_launcher_path:
-        print("Star Citizen Launcher not running.")
-        return None
-
-    print("Star Citizen Launcher running at:", sc_launcher_path)
-
-    # Search for Game.log in the folder next to StarCitizen_Launcher.exe
-    star_citizen_dir = os.path.dirname(sc_launcher_path)
-    print(f"Searching for Game.log in directory: {star_citizen_dir}")
-    log_path = find_game_log_in_directory(star_citizen_dir)
-
-    if log_path:
-        print("Setting SC_LOG_LOCATION to:", log_path)
-        os.environ['SC_LOG_LOCATION'] = log_path
-        return log_path
-    else:
-        print("Game.log not found in expected locations.")
-        return None
         
 # Substrings to ignore
 ignore_kill_substrings = [
@@ -300,9 +122,7 @@ ignore_kill_substrings = [
 ]
 
 def check_substring_list(line, substring_list):
-    """
-    Check if any substring from the list is present in the given line.
-    """
+    """Check if any substring from the list is present in the given line."""
     for substring in substring_list:
         if substring.lower() in line.lower():
             return True
@@ -330,52 +150,11 @@ def check_exclusion_scenarios(line, logger):
 
     return True
 
-def validate_api_key(api_key, player_name):
-    url = "http://drawmyoshi.com:25966/validateKey"
-    headers = {
-        "Authorization": api_key,
-        "Content-Type": "application/json"
-    }
-    data = {
-        "api_key": api_key,
-        "player_name": rsi_handle  # Include the player name
-    }
-
-    try:
-        response = requests.post(url, headers=headers, json=data)
-        if response.status_code == 200:
-            return True  # Success
-        else:
-            return False  # Failure
-    except requests.RequestException as e:
-        print(f"API Key validation error: {e}")
-        return False
-
-def save_api_key(key):
-    try:
-        with open("killtracker_key.cfg", "w") as f:
-            f.write(key)
-        api_key["value"] = key  # Make sure to save the key in the global api_key dictionary as well
-        logger.log(f"API key saved successfully: {key}")
-    except Exception as e:
-        logger.log(f"Error saving API key: {e}")
-
-def get_player_name(log_file_location, logger):
-    global global_rsi_handle  # Use the global variable here
-    # Retrieve the RSI handle using the existing function
-    rsi_handle = find_rsi_handle(log_file_location)
-    global_rsi_handle = find_rsi_handle(log_file_location)
-    if not rsi_handle:
-        logger.log("Error: RSI handle not found.")
-        return None
-    return rsi_handle
-
 # Trigger kill event
 def parse_kill_line(line, target_name, logger):
     global global_active_ship
     global player_status  # Add a global status variable to track player's state
     player_status = "alive"  # Default status is alive
-    
 
     if not check_exclusion_scenarios(line, logger):
         return
@@ -397,10 +176,9 @@ def parse_kill_line(line, target_name, logger):
         post_heartbeat_death_event(target_name, killed_zone, logger)
         destroy_player_zone(line, logger)
         return
-    
-    # Log a custom message for a successful kill
-    event_message = f"You have killed {killed},"
-    logger.log(event_message)
+
+    logger.log(f"✅ You have killed {killed},")
+    logger.log(f"and brought glory to the Veil.")
 
     json_data = {
         'player': target_name,
@@ -432,15 +210,17 @@ def parse_kill_line(line, target_name, logger):
             timeout=30
         )
         if response.status_code == 200:
-            play_random_sound()
+            play_random_sound(logger)
             logger.log("and brought glory to the Veil.")
         else:
-            logger.log(f"Servitor connectivity error: {response.status_code}.")
-            logger.log("Relaunch BV Kill Tracker and reconnect with a new Key.")
+            logger.log(f"⚠️ Servitor connectivity error: {response.status_code}.")
+            logger.log("⚠️ Relaunch BV Kill Tracker and reconnect with a new Key.")
     except requests.exceptions.RequestException as e:
         async_loading_animation(logger, app)
-        logger.log(f"Error sending kill event: {e}")
-        logger.log("Kill event will not be sent. Please ensure a valid key and try again.")
+        logger.log(f"⚠️ Error sending kill event: {e}")
+        logger.log("⚠️ Kill event will not be sent. Please ensure a valid key and try again.")
+    except Exception as e:
+        logger.log(f"⚠️ Error when parsing kill: {e.__class__.__name__} {e}")
 
 def read_existing_log(log_file_location, rsi_name):
     sc_log = open(log_file_location, "r")
@@ -456,13 +236,14 @@ def find_rsi_handle(log_file_location):
         if -1 != line.find(acct_str):
             line_index = line.index("Handle[") + len("Handle[")
             if 0 == line_index:
-                print("RSI_HANDLE: Not Found!")
+                logger.log("⚠️ RSI_HANDLE: Not Found!")
                 exit()
             potential_handle = line[line_index:].split(' ')[0]
             return potential_handle[0:-1]
-    return None
+    logger.log(f"❌ Error: RSI handle not found.")
+    return ""
 
-def find_rsi_geid(log_file_location):
+def find_rsi_geid(log_file_location, logger):
     global global_player_geid
     acct_kw = "AccountLoginCharacterStatus_Character"
     sc_log = open(log_file_location, "r")
@@ -470,7 +251,7 @@ def find_rsi_geid(log_file_location):
     for line in lines:
         if -1 != line.find(acct_kw):
             global_player_geid = line.split(' ')[11]
-            print("Player geid: " + global_player_geid)
+            logger.log(f"Player geid: {global_player_geid}")
             return
 
 def set_game_mode(line, logger):
@@ -486,8 +267,15 @@ def set_game_mode(line, logger):
         global_active_ship = "N/A"
         global_active_ship_id = "N/A"
 
+
+
+#########################################################################################################
+### GUI FUNCTIONS                                                                                     ###
+#########################################################################################################
+
+
+
 def setup_gui(game_running):
-    global is_playing_sound
     app = tk.Tk()
     app.title("BlightVeil Kill Tracker V1.3")
     app.geometry("800x800")
@@ -515,7 +303,7 @@ def setup_gui(game_running):
         print(f"Error loading banner image: {e}")
 
     # Check for Updates
-    update_message = check_for_updates()
+    update_message = check_for_kt_updates()
     if update_message:
         update_label = tk.Label(
             app,
@@ -528,7 +316,7 @@ def setup_gui(game_running):
             cursor="hand2",
         )
         update_label.pack(pady=(10, 10))
-
+    
         def open_github(event):
             try:
                 url = update_message.split("Download it here: ")[-1]
@@ -560,64 +348,98 @@ def setup_gui(game_running):
             bg="#484759",
         )
         api_status_label.pack(pady=(10, 10))
-        
+        print('a')
         def activate_and_load_key():
-            entered_key = key_entry.get().strip()  # Access key_entry here
-            if not entered_key:
-                # If the text box is empty, load the existing key
+            global global_rsi_handle  # Use the global variable here
+
+            def get_player_name(log_file_location):
+                global global_rsi_handle
+                # Retrieve the RSI handle using the existing function
+                global_rsi_handle = find_rsi_handle(log_file_location)
+
+            def validate_api_key(api_key):
+                global global_rsi_handle
+                url = "http://drawmyoshi.com:25966/validateKey"
+                headers = {
+                    "Authorization": api_key,
+                    "Content-Type": "application/json"
+                }
+                data = {
+                    "api_key": api_key,
+                    "player_name": global_rsi_handle
+                }
+
                 try:
+                    response = requests.post(url, headers=headers, json=data)
+                    if not response.status_code == 200:
+                        logger.log(f"❌ API for key validation returned code {response.status_code} - {response.text}")
+                        return False
+                    return True
+                except requests.RequestException as e:
+                    logger.log(f"❌ API key validation error: {e.__class__.__name__} {e}")
+                    return False
+                        
+            def save_api_key(key):
+                try:
+                    with open("killtracker_key.cfg", "w") as f:
+                        f.write(key)
+                    api_key["value"] = key  # Make sure to save the key in the global api_key dictionary as well
+                    logger.log(f"✅ API key saved successfully: {key}")
+                except Exception as e:
+                    logger.log(f"❌ Error saving API key: {e.__class__.__name__} {e}")
+
+            try:
+                entered_key = key_entry.get().strip()  # Access key_entry here
+            except Exception as e:
+                logger.log(f"❌ Error parsing API key: {e.__class__.__name__} {e}")
+
+            try:
+                if not entered_key:
+                    logger.log("⚠️ No key was entered. Attempting to load saved key if it exists...")
                     with open("killtracker_key.cfg", "r") as f:
                         entered_key = f.readline().strip()
                         if entered_key:
                             api_key["value"] = entered_key  # Assign the loaded key
-                            logger.log(f"Existing key loaded: {entered_key}. Attempting to establish Servitor connection...")
-                            if validate_api_key(entered_key, get_player_name(set_sc_log_location(), logger)):  # Pass logger here
-                                logger.log("Servitor connection established.")
-                                logger.log("Go Forth And Slaughter")
-                                api_status_label.config(text="API Status: Valid (Expires in 72 hours)", fg="green")
-                                start_api_key_countdown(entered_key, api_status_label)
-                            else:
-                                logger.log("Invalid key. Please input a valid key.")
-                                api_status_label.config(text="API Status: Invalid", fg="red")
-                        else:
-                            logger.log("No valid key found. Please enter a key.")
-                            api_status_label.config(text="API Status: Invalid", fg="red")
-                except FileNotFoundError:
-                    logger.log("No existing key found. Please enter a valid key.")
-                    api_status_label.config(text="API Status: Invalid", fg="red")
-            else:
-                # If the text box is not empty, proceed with activation
-                log_file_location = set_sc_log_location()  # Assuming this is defined elsewhere
+                            logger.log(f"Saved key loaded: {entered_key}. Attempting to establish Servitor connection...")
+            except FileNotFoundError:
+                logger.log("⚠️ No saved key found. Please enter a valid key.")
+                api_status_label.config(text="API Status: Invalid", fg="red")
+
+            try:
+                # Proceed with activation
+                log_file_location = get_sc_log_location(logger)
                 if log_file_location:
-                    player_name = get_player_name(log_file_location, logger)  # Pass logger here
-                    if player_name:
-                        if validate_api_key(entered_key, player_name):  # Pass both the key and player name
+                    get_player_name(log_file_location) # Get the global RSI handle
+                    if global_rsi_handle:
+                        if validate_api_key(entered_key):  # Pass both the key and player name
                             save_api_key(entered_key)  # Save the key for future use
-                            logger.log("Key activated and saved. Servitor connection established.")
-                            logger.log("Go Forth And Slaughter")
+                            logger.log("✅ Key activated and saved. Servitor connection established.")
+                            logger.log("✅ Go Forth And Slaughter...")
                             api_status_label.config(text="API Status: Valid (Expires in 72 hours)", fg="green")
                             start_api_key_countdown(entered_key, api_status_label)
                         else:
-                            logger.log("Invalid key or player name. Please enter a valid API key.")
+                            logger.log("⚠️ Invalid key or player name. Please enter a valid API key.")
                             api_status_label.config(text="API Status: Invalid", fg="red")
                     else:
-                        logger.log("RSI Handle not found. Please ensure the game is running and the log file is accessible.")
+                        logger.log("⚠️ RSI Handle not found. Please ensure the game is running and the log file is accessible.")
                         api_status_label.config(text="API Status: Error", fg="yellow")
                 else:
-                    logger.log("Log file location not found.")
+                    logger.log("⚠️ Log file location not found.")
                     api_status_label.config(text="API Status: Error", fg="yellow")
-
+            except Exception as e:
+                logger.log(f"❌ Error parsing API key: {e.__class__.__name__} {e}")
+        print('b')
         # Update the button to use the new combined function
         activate_load_key_button = tk.Button(
             key_frame,
             text="Activate & Load Key",
             font=("Times New Roman", 12),
-            command=activate_and_load_key,
+            command=activate_and_load_key(),
             bg="#000000",
             fg="#ffffff",
         )
         activate_load_key_button.pack(side=tk.LEFT, padx=(5, 0))
-        
+
         # Commander Mode Button
         commander_mode_button = tk.Button(
             app,
@@ -628,7 +450,7 @@ def setup_gui(game_running):
             fg="#ffffff",
         )
         commander_mode_button.pack(pady=(10, 10)) 
-        
+
         # Log Display
         text_area = scrolledtext.ScrolledText(
             app, wrap=tk.WORD, width=80, height=20, state=tk.DISABLED, bg="#282a36", fg="#f8f8f2", font=("Consolas", 12)
@@ -783,7 +605,7 @@ def open_commander_mode(logger):
     )
     add_all_to_fleet_button.pack(pady=(10, 10))
     
-    start_hearbeat_button = tk.Button(
+    start_heartbeat_button = tk.Button(
         commander_window,
         text="Connect to Commander",
         font=("Times New Roman", 12),
@@ -791,7 +613,7 @@ def open_commander_mode(logger):
         bg="#000000",
         fg="#ffffff",
     )
-    start_hearbeat_button.pack(pady=(10, 10))
+    start_heartbeat_button.pack(pady=(10, 10))
 
     # Close Button
     dc_button = tk.Button(
@@ -814,6 +636,34 @@ def open_commander_mode(logger):
                     connected_users_listbox.insert(tk.END, user['player'])
 
     search_var.trace("w", search_users)
+
+    def allocate_selected_users() -> None:
+        """Allocate selected Connected Users to Allocated Forces."""
+        try:
+            curr_alloc_users = [user["player"] for user in logger.alloc_users]
+            selected_indices = connected_users_listbox.curselection()
+            for index in selected_indices:
+                player_name = connected_users_listbox.get(index)
+                # Find the full user info
+                user_info = next((user for user in logger.connected_users if user['player'] == player_name), None)
+                if user_info and user_info["player"] not in curr_alloc_users:
+                    # Add to allocated forces
+                    logger.alloc_users.append(user_info)
+                    allocated_forces_listbox.insert(tk.END, f"{user_info['player']} - Zone: {user_info['zone']}")
+        except Exception as e:
+            logger.log(f"⚠️ ERROR allocate_selected_users(): {e.__class__.__name__} - {e}")
+
+    def allocate_all_users() -> None:
+        """Allocate all Connected Users to Allocated Forces if not already in."""
+        try:
+            curr_alloc_users = [user["player"] for user in logger.alloc_users]
+            for conn_user in logger.connected_users:
+                if conn_user["player"] not in curr_alloc_users:
+                    # Add to allocated forces
+                    logger.alloc_users.append(conn_user)
+                    allocated_forces_listbox.insert(tk.END, f"{conn_user['player']} - Zone: {conn_user['zone']}")
+        except Exception as e:
+            logger.log(f"⚠️ ERROR allocate_all_users(): {e.__class__.__name__} - {e}")
 
     def allocate_selected_users() -> None:
         """Allocate selected Connected Users to Allocated Forces."""
@@ -886,7 +736,7 @@ def open_commander_mode(logger):
     # Attach the refresh_user_list function to the logger
     logger.refresh_user_list = refresh_user_list
 
-    def check_for_updates():
+    def check_for_cm_updates():
         """
         Checks the update_queue for new commander data and refreshes the user list.
         This method should be called periodically from the Tkinter main loop.
@@ -896,10 +746,10 @@ def open_commander_mode(logger):
             logger.refresh_user_list(active_commanders)
 
         # Check again after a short delay
-        commander_window.after(1000, check_for_updates)  # Run every second
+        commander_window.after(1000, check_for_cm_updates)  # Run every second
 
     # Assuming commander_window is your Tkinter window object
-    commander_window.after(1000, check_for_updates)
+    commander_window.after(1000, check_for_cm_updates)
 
     def clear_listboxes():
         """Cleanup listboxes when disconnected."""
@@ -907,6 +757,14 @@ def open_commander_mode(logger):
         logger.alloc_users.clear()
         connected_users_listbox.delete(0, tk.END)
         allocated_forces_listbox.delete(0, tk.END)
+
+
+
+#########################################################################################################
+### API FUNCTIONS                                                                                     ###
+#########################################################################################################
+
+
 
 def post_heartbeat_death_event(target_name, killed_zone, logger):
     """Currently only support death events from the player!"""
@@ -965,9 +823,7 @@ def post_heartbeat_enter_ship_event(rsi_handle, player_ship, logger):
         logger.log(f"Error reporting ship status event: {e}")
 
 def post_heartbeat(rsi_handle, logger):
-    """
-    Sends a heartbeat to the server every 5 seconds and updates the UI with active commanders.
-    """
+    """Sends a heartbeat to the server every 5 seconds and updates the UI with active commanders."""
     global global_heartbeat_active
     global global_active_ship
 
@@ -980,7 +836,6 @@ def post_heartbeat(rsi_handle, logger):
 
     while global_heartbeat_active:
         time.sleep(5)
-
         # Determine status based on the active ship
         status = "alive" if global_active_ship != "N/A" else "dead"
 
@@ -1020,7 +875,7 @@ def post_heartbeat(rsi_handle, logger):
             return        
 
 def start_heartbeat_thread(logger):
-    """Start the heartbeat in a seperate thread"""
+    """Start the heartbeat in a separate thread."""
     global global_rsi_handle
     global global_heartbeat_active
     global global_heartbeat_daemon
@@ -1041,7 +896,6 @@ def stop_heartbeat_thread(logger):
         global_heartbeat_daemon.join()
         return
 
-#API Key Management
 def run_api_key_expiration_check(api_key):
     """Run get_api_key_expiration_time in a separate thread."""
     thread = threading.Thread(target=get_api_key_expiration_time, args=(api_key,))
@@ -1049,9 +903,7 @@ def run_api_key_expiration_check(api_key):
     thread.start()
 
 def start_api_key_countdown(api_key, api_status_label):
-    """
-    Function to start the countdown for the API key's expiration, refreshing expiry data periodically.
-    """
+    """Start the countdown for the API key's expiration, refreshing expiry data periodically."""
     def fetch_expiration_time():
         """Fetch expiration time in a separate thread and update countdown."""
         def threaded_request():
@@ -1083,9 +935,7 @@ def start_api_key_countdown(api_key, api_status_label):
     fetch_expiration_time()  # Initial call
 
 def get_api_key_expiration_time(api_key):
-    """
-    Retrieve the expiration time for the API key from the validation server.
-    """
+    """Retrieve the expiration time for the API key from the validation server."""
     url = "http://drawmyoshi.com:25966/validateKey"
     headers = {
         "Authorization": api_key,
@@ -1103,7 +953,7 @@ def get_api_key_expiration_time(api_key):
             if expiration_time_str:
                 return datetime.datetime.strptime(expiration_time_str, "%Y-%m-%dT%H:%M:%S.%fZ")
             else:
-                print("Error: 'expires_at' not found in response")
+                logger.log("⚠️ Error: 'expires_at' not found in response")
         else:
             print("Error fetching expiration time:", response.json().get("error", "Unknown error"))
     except requests.RequestException as e:
@@ -1111,6 +961,103 @@ def get_api_key_expiration_time(api_key):
 
     # Fallback: Expire immediately if there's an error
     return None
+
+
+
+#########################################################################################################
+### MAIN FUNCTIONS                                                                                    ###
+#########################################################################################################
+
+
+
+def resource_path(relative_path):
+    """Get the absolute path to the resource (works for PyInstaller .exe and Nuitka .exe)."""
+    try:
+        # When running in a frozen environment (compiled executable)
+        base_path = sys._MEIPASS  
+    except AttributeError:
+        # When running in a normal Python environment (source code)
+        base_path = os.path.abspath(".")
+    try:
+        return os.path.join(base_path, relative_path)
+    except Exception as e:
+        print(f"❌ Error getting the absolute path to the resource path: {e.__class__.__name__} {e}")
+        return relative_path
+
+def check_for_kt_updates():
+    """Check for updates using the GitHub API."""
+    github_api_url = "https://api.github.com/repos/BlightVeil/Killtracker/releases/latest"
+
+    try:
+        headers = {'User-Agent': 'Killtracker/1.3'}
+        response = requests.get(github_api_url, headers=headers, timeout=5)
+
+        if response.status_code == 200:
+            release_data = response.json()
+            remote_version = release_data.get("tag_name", "v1.3").strip("v")
+            download_url = release_data.get("html_url", "")
+
+            if version.parse(local_version) < version.parse(remote_version):
+                return f"Update available: {remote_version}. Download it here: {download_url}"
+        else:
+            print(f"GitHub API error: {response.status_code}")
+    except Exception as e:
+        print(f"Error checking for updates: {e.__class__.__name__} {e}")
+    return None
+
+def check_if_process_running(process_name):
+    """Check if a process is running by name."""
+    for proc in psutil.process_iter(['pid', 'name', 'exe']):
+        if process_name.lower() in proc.info['name'].lower():
+            return proc.info['exe']
+    return None
+
+def is_game_running():
+    """Check if Star Citizen is running."""
+    return check_if_process_running("StarCitizen") is not None
+
+def get_sc_log_path(directory, logger):
+    """Search for Game.log in the directory and its parent directory."""
+    game_log_path = os.path.join(directory, 'Game.log')
+    if os.path.exists(game_log_path):
+        logger.log(f"Found Game.log in: {directory}")
+        return game_log_path
+    # If not found in the same directory, check the parent directory
+    parent_directory = os.path.dirname(directory)
+    game_log_path = os.path.join(parent_directory, 'Game.log')
+    if os.path.exists(game_log_path):
+        logger.log(f"Found Game.log in parent directory: {parent_directory}")
+        return game_log_path
+    return None
+
+def get_sc_log_location(logger):
+    """Check for RSI Launcher and Star Citizen Launcher, and get the log path."""
+    # Check if RSI Launcher is running
+    rsi_launcher_path = check_if_process_running("RSI Launcher")
+    if not rsi_launcher_path:
+        logger.log("⚠️ RSI Launcher not running.")
+        return None
+
+    logger.log(f"✅ RSI Launcher running at: {rsi_launcher_path}")
+
+    # Check if Star Citizen Launcher is running
+    sc_launcher_path = check_if_process_running("StarCitizen")
+    if not sc_launcher_path:
+        logger.log("⚠️ Star Citizen Launcher not running.")
+        return None
+    
+    logger.log(f"✅ Star Citizen Launcher running at: {sc_launcher_path}")
+
+    # Search for Game.log in the folder next to StarCitizen_Launcher.exe
+    star_citizen_dir = os.path.dirname(sc_launcher_path)
+    logger.log(f"Searching for Game.log in directory: {star_citizen_dir}")
+    log_path = get_sc_log_path(star_citizen_dir, logger)
+
+    if log_path:
+        return log_path
+    else:
+        logger.log("⚠️ Game.log not found in expected locations.")
+        return None
 
 # Event checking logic. Look for substrings, do stuff based on what we find.
 def read_log_line(line, rsi_handle, upload_kills, logger):
@@ -1137,11 +1084,6 @@ def tail_log(log_file_location, rsi_name, logger):
         logger.log(f"No log file found at {log_file_location}.")
         return
     logger.log("Kill Tracking Initiated...")
-    copy_new_sounds()
-    copy_sounds_to_target_folder()
-    logger.log(f"Looking for sounds in: {SOUNDS_FOLDER}")
-    logger.log(f"Files inside: {os.listdir(SOUNDS_FOLDER) if os.path.exists(SOUNDS_FOLDER) else 'Not Found'}")
-    logger.log("To Add new Sounds Drag .wav files to the sounds folder and restart either Star Citizen Or KT")
     logger.log("Enter key to establish Servitor connection...")
 
     # Read all lines to find out what game mode player is currently, in case they booted up late.
@@ -1167,16 +1109,44 @@ def tail_log(log_file_location, rsi_name, logger):
             read_log_line(line, rsi_name, True, logger)
 
 def start_tail_log_thread(log_file_location, rsi_name, logger):
-    """ Start the log tailing in a separate thread only if it's not already running. """
-    if not logger.is_monitoring:  # Make sure the tailing isn't already started
-        thread = threading.Thread(target=tail_log, args=(log_file_location, rsi_name, logger))
-        thread.daemon = True
-        thread.start()
-        logger.is_monitoring = True
+    """Start the log tailing in a separate thread only if it's not already running."""
+    thread = threading.Thread(target=tail_log, args=(log_file_location, rsi_name, logger))
+    thread.daemon = True
+    thread.start()
 
-def is_game_running():
-    """Check if Star Citizen is running."""
-    return check_if_process_running("StarCitizen") is not None
+def create_sounds_dir(logger) -> None:
+    """Create directory for sounds and set vars."""
+    global sounds_pyinst_dir
+    global sounds_live_dir
+    try:
+        sounds_pyinst_dir = Path(resource_path("sounds"))  # The PyInstaller temp executable directory
+        sounds_live_dir = Path.cwd() / "sounds"  # The directory where the executable lives
+        # Ensure the folders exist
+        sounds_pyinst_dir.mkdir(exist_ok=True)
+        sounds_live_dir.mkdir(exist_ok=True)
+    except Exception as e:
+        logger.log(f"❌ Error when handling the sound folder: {e.__class__.__name__} {e}")
+
+def monitor_game_state(log_file_location, rsi_name, logger) -> None:
+    """Continuously monitor the game state and manage log monitoring."""
+    while True: # FIXME NEEDS BREAK CONDITION?
+        try:
+            game_running = is_game_running()
+
+            if game_running and not logger.is_monitoring:  # Log only when transitioning to running
+                logger.log("✅ Star Citizen is running. Starting log monitoring.")
+                #logger.log("Ignore API Key if Status Is Green")
+                start_tail_log_thread(log_file_location, rsi_name, logger)
+                logger.is_monitoring = True
+
+            elif not game_running and logger.is_monitoring:  # Log only when transitioning to stopped
+                logger.log("⚠️ Star Citizen has stopped. Pausing log monitoring...")
+                logger.is_monitoring = False
+
+            time.sleep(5)  # Check every 5 seconds
+        except Exception as e:
+            logger.log(f"❌ Error in monitor_game_state(): {e.__class__.__name__} {e}")
+
 
 def auto_shutdown(app, delay_in_seconds, logger=None):
     def shutdown():
@@ -1195,20 +1165,74 @@ def auto_shutdown(app, delay_in_seconds, logger=None):
     shutdown_thread = threading.Thread(target=shutdown, daemon=True)
     shutdown_thread.start()
 
+def copy_sounds(source, target, logger) -> bool:
+    """Copy any new sound files from one folder to another."""
+    try:
+        if not source.exists():
+            raise Exception(f"Source sounds folder not found: {str(source)}")
+        if not target.exists():
+            raise Exception(f"Target sounds folder not found: {str(target)}")
+    except Exception as e:
+        logger.log(f"❌ Error copying new sounds: {e.__class__.__name__} {e}")
+        return False
+
+    try:
+        # Get the list of existing files in the source folder
+        source_files = list(source.glob('**/*.wav'))
+        logger.log(f"Found source files {source_files}")
+        for sound_file in source_files:
+            target_path = target / sound_file
+            # Check if targets doesn't exist
+            if not target_path.exists():
+                shutil.copy(sound_file, target_path)
+                logger.log(f"Copied sound: {sound_file} to {target_path}")
+        return True
+    except Exception as e:
+        logger.log(f"❌ Error copying sounds: {e.__class__.__name__} {e}")
+        return False
+
+def play_random_sound(logger):
+    """Play a single random .wav file from the sounds folder."""
+    global sounds_live_dir
+    sounds = list(sounds_live_dir.glob('**/*.wav'))
+    if sounds:
+        sound_to_play = random.choice(sounds)  # Select a random sound
+        try:
+            logger.log(f"Playing sound: {sound_to_play.name}")
+            winsound.PlaySound(str(sound_to_play), winsound.SND_FILENAME | winsound.SND_ASYNC)  # Play the selected sound
+            time.sleep(1)
+        except Exception as e:
+            logger.log(f"❌ Error playing sound {sound_to_play}: {e.__class__.__name__} {e}")
+    else:
+        logger.log("❌ No .wav sound files found.")
+
+
+
 if __name__ == '__main__':
     try:
         game_running = is_game_running()
 
         app, logger = setup_gui(game_running)
+    except KeyboardInterrupt:
+        print("Program interrupted. Exiting gracefully...")
+        # Optionally add any cleanup or logging here before exiting.
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        # Optionally log the error
 
+    try:
+        create_sounds_dir(logger)
+        copy_success = copy_sounds(sounds_pyinst_dir, sounds_live_dir, logger)
+        if copy_success:
+            logger.log(f"Included sounds found at: {str(sounds_live_dir)}")
+            logger.log(f"Sound Files inside: {os.listdir(str(sounds_live_dir)) if os.path.exists(str(sounds_live_dir)) else 'Not Found'}")
+            logger.log("To add new Sounds to the Kill Tracker, copy .wav files to the sounds folder.")
         if game_running:
             # Start log monitoring in a separate thread
-            log_file_location = set_sc_log_location()
+            log_file_location = get_sc_log_location(logger)
+
             if log_file_location:
                 rsi_handle = find_rsi_handle(log_file_location)
-                if rsi_handle:
-                    start_tail_log_thread(log_file_location, rsi_handle, logger)
-
                 # Start monitoring game state in a separate thread
                 if rsi_handle:  # Ensure rsi_handle is valid
                     game_state_thread = threading.Thread(target=monitor_game_state, args=(log_file_location, rsi_handle, logger))
@@ -1226,7 +1250,5 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print("Program interrupted. Exiting gracefully...")
         # Optionally add any cleanup or logging here before exiting.
-
     except Exception as e:
-        print(f"Unexpected error: {e}")
-        # Optionally log the error
+        print(f"main() error: {e.__class__.__name__} {e}")
