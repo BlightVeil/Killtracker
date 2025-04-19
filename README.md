@@ -1,8 +1,4 @@
-## Official KillTracker for BlightVeil
-We are an organization for Star Citizen.
-
-Check us out:
-https://robertsspaceindustries.com/en/orgs/BVL
+## Official Kill Tracker for BlightVeil
 
 
 **Install:**
