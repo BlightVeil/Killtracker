@@ -8,7 +8,7 @@ api_key_exp_time = {
 }
 
 kill_result = {
-    "result": "other_kill",
+    "result": "exclusion"/"own_death"/"other_kill",
     "data": {
         "player": target_name,
         "victim": killed,

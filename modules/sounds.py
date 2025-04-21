@@ -2,6 +2,14 @@
 self.global sounds_pyinst_dir
         self.global sounds_live_dir
 
+
+        create_sounds_dir(logger)
+        copy_success = copy_sounds(sounds_pyinst_dir, sounds_live_dir, logger)
+        if copy_success:
+            logger.log(f"Included sounds found at: {str(sounds_live_dir)}")
+            logger.log(f"Sound Files inside: {listdir(str(sounds_live_dir)) if path.exists(str(sounds_live_dir)) else 'Not Found'}")
+            logger.log("To add new Sounds to the Kill Tracker, copy .wav files to the sounds folder.")
+
 def create_sounds_dir(logger) -> None:
     """Create directory for sounds and set vars."""
     global sounds_pyinst_dir

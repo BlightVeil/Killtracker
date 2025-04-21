@@ -4,7 +4,7 @@ import threading
 
 class LogParser():
     """Parses the game.log file for Star Citizen."""
-    def __init__(self, logger, api_client_module, sound_module, cm_api_module, log_file_location, rsi_handle, active_ship):
+    def __init__(self, logger, api_client_module, sound_module, cm_api_module, log_file_location, rsi_handle, active_ship, anonymize_state):
         self.log = logger
         self.api = api_client_module
         self.sounds = sound_module
@@ -12,6 +12,7 @@ class LogParser():
         self.log_file_location = log_file_location
         self.rsi_handle = rsi_handle
         self.active_ship = active_ship
+        self.anonymize_state = anonymize_state
         self.game_mode = "Nothing"
         self.active_ship_id = "N/A"
         self.player_geid = "N/A"
@@ -108,6 +109,8 @@ class LogParser():
                     self.log.info(f"and brought glory to BlightVeil.")
                     self.sounds.play_random_sound()
                     self.api.post_kill_event(kill_result)
+                else:
+                    self.log.error(f"Kill failed to parse: {line}")
 
     def set_game_mode(self, line: str) -> None:
         """Parse log for current active game mode."""
@@ -126,12 +129,14 @@ class LogParser():
         self.log.debug("Player has entered ship: ", self.active_ship["current"])
     
     def destroy_player_zone(self) -> None:
+        """Remove current active ship zone."""
         if ("N/A" != self.active_ship["current"]) or ("N/A" != self.active_ship_id):
             self.log.debug(f"Ship Destroyed: {self.active_ship['current']} with ID: {self.active_ship_id}")
             self.active_ship["current"] = "N/A"
             self.active_ship_id = "N/A"
 
     def set_player_zone(self, line: str) -> None:
+        """Set current active ship zone."""
         line_index = line.index("-> Entity ") + len("-> Entity ")
         if 0 == line_index:
             self.log.debug(f"Active Zone Change: {self.active_ship['current']}")
@@ -154,7 +159,8 @@ class LogParser():
                 return True
         return False
 
-    def check_exclusion_scenarios(self, line: str) -> bool:        
+    def check_exclusion_scenarios(self, line: str) -> bool:
+        """Check for kill edgecase scenarios."""
         if self.game_mode == "EA_FreeFlight":
             if "Crash" in line:
                 self.log.info("Probably a ship reset, ignoring kill!")
@@ -174,6 +180,7 @@ class LogParser():
         return True
 
     def find_rsi_handle(self) -> str:
+        """Get the current user's RSI handle."""
         acct_str = "<Legacy login response> [CIG-net] User Login Success"
         sc_log = open(self.log_file_location, "r")
         lines = sc_log.readlines()
@@ -202,7 +209,7 @@ class LogParser():
     '''
 
     def parse_kill_line(self, line, target_name):
-        """ Parse kill event"""
+        """Parse kill event."""
         try:
             kill_result = {"result": "", "data": None}
 
@@ -223,7 +230,6 @@ class LogParser():
                 # Log a message for the player's own death
                 kill_result["result"] = "own_death"
                 kill_result["data"] = killed_zone
-                return kill_result
             else:
                 kill_result["result"] = "other_kill"
                 kill_result["data"] = {
@@ -238,3 +244,7 @@ class LogParser():
                     'killers_ship': self.active_ship["current"],
                     'anonymize_state': self.anonymize_state
                 }
+            return kill_result
+        except Exception as e:
+            self.log.error(f"parse_kill_line(): Error: {e.__class__.__name__} {e}")
+            return {"result": "", "data": None}

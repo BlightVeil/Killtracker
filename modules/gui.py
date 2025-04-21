@@ -52,9 +52,9 @@ class AppLogger():
 
 class GUI():
     """Build and launch the GUI for the KillTracker."""
-    def __init__(self, local_version):
+    def __init__(self, local_version, anonymize_state):
         self.local_version = local_version
-        self.anonymize_state = {"enabled": False}
+        self.anonymize_state = anonymize_state
         self.app = tk.Tk()
         self.api = None
         self.cm = None

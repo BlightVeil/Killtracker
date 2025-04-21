@@ -28,12 +28,12 @@ class KillTracker():
         self.local_version = "1.4"
         self.log = None
         #self.stop_event = threading.Event()
-
-        self.global_commander_heartbeat_status = False
+        self.anonymize_state = {"enabled": False}
         self.heartbeat_status = {"active": False}
         self.rsi_handle = {"current": "N/A"}
         self.active_ship = {"current": "N/A"}
         self.update_queue = Queue()
+        self.log_parser = None
     
     def check_if_process_running(self, process_name):
         """Check if a process is running by name."""
@@ -46,26 +46,25 @@ class KillTracker():
         """Check if Star Citizen is running."""
         return self.check_if_process_running("StarCitizen") is not None
 
-    def monitor_game_state(self, log_file_location, rsi_name, logger) -> None:
+    def monitor_game_state(self) -> None:
         """Continuously monitor the game state and manage log monitoring."""
         while True: # FIXME NEEDS BREAK CONDITION?
             try:
-                game_running = is_game_running()
+                game_running = self.is_game_running()
 
-                if game_running and not logger.is_monitoring:  # Log only when transitioning to running
-                    logger.log("✅ Star Citizen is running. Starting log monitoring.")
-                    #logger.log("Ignore API Key if Status Is Green")
-                    start_tail_log_thread(log_file_location, rsi_name, logger)
-                    logger.is_monitoring = True
+                if game_running and not self.is_monitoring:  # Log only when transitioning to running
+                    self.log.success("Star Citizen is running. Starting log monitoring.")
+                    #self.log.info("Ignore API Key if Status Is Green.")
+                    self.log_parser.start_tail_log_thread()
+                    self.is_monitoring = True
 
-                elif not game_running and logger.is_monitoring:  # Log only when transitioning to stopped
-                    logger.log("⚠️ Star Citizen has stopped. Pausing log monitoring...")
-                    logger.is_monitoring = False
+                elif not game_running and self.is_monitoring:  # Log only when transitioning to stopped
+                    self.log.warning("Star Citizen has stopped. Pausing log monitoring...")
+                    self.is_monitoring = False
 
                 time.sleep(5)  # Check every 5 seconds
             except Exception as e:
-                logger.log(f"❌ Error in monitor_game_state(): {e.__class__.__name__} {e}")
-
+                self.log.error(f"monitor_game_state(): Error: {e.__class__.__name__} {e}")
 
     def auto_shutdown(app, delay_in_seconds, logger=None):
         def shutdown():
@@ -96,7 +95,7 @@ def main():
         print(f"main(): ERROR in checking if the game is running: {e.__class__.__name__} {e}")
 
     try:
-        gui_module = GUI(kt.local_version)
+        gui_module = GUI(kt.local_version, kt.anonymize_state)
         log = gui_module.log # Used to pass logger ref to other modules
     except Exception as e:
         print(f"main(): ERROR in setting up the GUI module: {e.__class__.__name__} {e}")
@@ -122,23 +121,10 @@ def main():
                 self.log.log("⚠️ Log file location not found.")
                 api_status_label.config(text="API Status: Error", fg="yellow")
 
-        create_sounds_dir(logger)
-        copy_success = copy_sounds(sounds_pyinst_dir, sounds_live_dir, logger)
-        if copy_success:
-            logger.log(f"Included sounds found at: {str(sounds_live_dir)}")
-            logger.log(f"Sound Files inside: {listdir(str(sounds_live_dir)) if path.exists(str(sounds_live_dir)) else 'Not Found'}")
-            logger.log("To add new Sounds to the Kill Tracker, copy .wav files to the sounds folder.")
         if game_running:
-            # Start log monitoring in a separate thread
-            log_file_location = get_sc_log_location(logger)
-
-            if log_file_location:
-                rsi_handle = find_rsi_handle(log_file_location)
-                # Start monitoring game state in a separate thread
-                if rsi_handle:  # Ensure RSI handle is valid
-                    game_state_thread = threading.Thread(target=monitor_game_state, args=(log_file_location, rsi_handle, logger))
-                    game_state_thread.daemon = True
-                    game_state_thread.start()
+            game_state_thread = threading.Thread(target=kt.monitor_game_state, args=())
+            game_state_thread.daemon = True
+            game_state_thread.start()
 
         # Initiate auto-shutdown after 72 hours
         if logger:
