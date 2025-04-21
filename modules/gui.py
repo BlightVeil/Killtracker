@@ -1,9 +1,11 @@
 import tkinter as tk
 from tkinter import scrolledtext
+from threading import Thread
+from time import sleep
+from datetime import datetime
 from os import path
 
 # Import kill tracker modules
-from api_client import check_for_kt_updates, open_github
 import modules.helpers as Helpers
 
 #########################################################################################################
@@ -11,45 +13,38 @@ import modules.helpers as Helpers
 #########################################################################################################
 
 class AppLogger():
+    """Writes log lines to the GUI."""
     def __init__(self, text_widget):
         self.text_widget = text_widget
 
     def Decorator(log_writer):
         def widget_handler(self, message):
             self.text_widget.config(state=tk.NORMAL)
-            log_writer(self, message)
+            log_time = datetime.now().strftime("%X")
+            log_writer(self, log_time, message)
             self.text_widget.config(state=tk.DISABLED)
             self.text_widget.see(tk.END)
         return widget_handler
     
     @Decorator
-    def debug(self, message):
-        self.text_widget.insert(tk.END, "DEBUG " + message + "\n")
+    def debug(self, log_time, message):
+        self.text_widget.insert(tk.END, log_time + " DEBUG " + message + "\n")
 
     @Decorator
-    def info(self, message):
-        self.text_widget.insert(tk.END, message + "\n")
+    def info(self, log_time, message):
+        self.text_widget.insert(tk.END, log_time + " " + message + "\n")
 
     @Decorator
-    def warning(self, message):
-        self.text_widget.insert(tk.END, "⚠️ " + message + "\n")
+    def warning(self, log_time, message):
+        self.text_widget.insert(tk.END, log_time + " ⚠️ " + message + "\n")
 
     @Decorator
-    def error(self, message):
-        self.text_widget.insert(tk.END, "❌ " + message + "\n")
+    def error(self, log_time, message):
+        self.text_widget.insert(tk.END, log_time + " ❌ " + message + "\n")
 
     @Decorator
-    def success(self, message):
-        self.text_widget.insert(tk.END, "✅ " + message + "\n")
-
-
-class B():
-    def __init__(self, logger) -> None:
-        self.log = logger
-        
-b = B(app_logger)
-b.log.success("hi")
-self.log.error("derp")
+    def success(self, log_time, message):
+        self.text_widget.insert(tk.END, log_time + " ✅ " + message + "\n")
 
 #########################################################################################################
 ### GUI CLASS                                                                                         ###
@@ -59,7 +54,12 @@ class GUI():
     """Build and launch the GUI for the KillTracker."""
     def __init__(self, local_version):
         self.local_version = local_version
+        self.anonymize_state = {"enabled": False}
         self.app = tk.Tk()
+        self.api = None
+        self.cm = None
+        self.key_entry = None
+        self.api_status_label = None
         self.log = AppLogger(self.setup_app_log_display()) 
 
     def setup_app_log_display(self):
@@ -68,8 +68,101 @@ class GUI():
             self.app, wrap=tk.WORD, width=80, height=20, state=tk.DISABLED, bg="#282a36", fg="#f8f8f2", font=("Consolas", 12)
         )
         return text_area
+    
+    def toggle_anonymize(self):
+        """Setup anonymize button."""
+        if self.anonymize_state["enabled"]:
+            self.anonymize_state["enabled"] = False
+            self.anonymize_button.config(text="Enable Anonymity - Not Anonymous")
+            self.log.success(f"You are now not in anonymous mode.")
+        else:
+            self.anonymize_state["enabled"] = True
+            self.anonymize_button.config(text="Disable Anonymity - Anonymous")
+            self.log.success(f"You are now anonymous.")
+
+    def async_loading_animation(self) -> None:
+        def animate():
+            try:
+                for dots in [".", "..", "..."]:
+                    self.log.info(dots)
+                    self.app.update_idletasks()
+                    sleep(0.2)
+            except Exception as e:
+                self.log.error(f"animate(): Error: {e.__class__.__name__} {e}")
+                return
+        Thread(target=animate, daemon=True).start()
+    
+    def create_label(
+            self, window=None, text:str=None, font:str=None, command=None, bg:str=None, fg:str=None, wraplength:int=None, justify:str=None, cursor:str=None) -> tk.Label:
+        """Setup label."""
+        label = tk.Label(
+            master=window,
+            text=text,
+            font=font,
+            command=command,
+            bg=bg,
+            fg=fg,
+            wraplength=wraplength,
+            justify=justify,
+            cursor=cursor
+        )
+        return label
+
+    def create_button(self, window=None, text: str = None, font: tuple = None, command=None, bg: str = None, fg: str = None) -> tk.Button:
+        """Setup button."""
+        button = tk.Button(
+            master=window,
+            text=text,
+            font=font,
+            command=command,
+            bg=bg,
+            fg=fg,
+        )
+        return button
+
+    def add_module_buttons(self):
+        """Add buttons for modules."""
+        # API Key Input
+        key_frame = tk.Frame(self.app, bg="#484759")
+        key_frame.pack(pady=(10, 10))
+
+        key_label = self.create_label(
+            key_frame, text="Enter Key:", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+        )
+        key_label.pack(side=tk.LEFT, padx=(0, 5))
+
+        self.key_entry = tk.Entry(key_frame, width=30, font=("Times New Roman", 12))
+        self.key_entry.pack(side=tk.LEFT)
+
+        # API Status Label
+        self.api_status_label = self.create_label(
+            self.app, text="API Status: Not Validated", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+        )
+        self.api_status_label.pack(pady=(10, 10))
+
+        # Update the button to use the new combined function
+        activate_load_key_button = self.create_button(
+            key_frame, text="Activate & Load Key", font=("Times New Roman", 12), command=self.api.load_activate_key(), bg="#000000", fg="#ffffff"
+        )
+        activate_load_key_button.pack(side=tk.LEFT, padx=(5, 0))
+
+        # Commander Mode Button
+        commander_mode_button = self.create_button(
+            self.app, text="Commander Mode", font=("Times New Roman", 12), command=lambda: self.cm.open_commander_mode(), bg="#000000", fg="#ffffff"
+        )
+        commander_mode_button.pack(pady=(10, 10))
+
+        # App log text area
+        self.log.text_widget.pack(padx=10, pady=10)
+
+        # Add the button to the GUI
+        self.anonymize_button = self.create_button(
+            key_frame, text="Enable Anonymity - Not Anonymous", font=("Times New Roman", 12), command=self.toggle_anonymize(), bg="#000000", fg="#ffffff"
+        )
+        self.anonymize_button.pack(side=tk.LEFT, padx=(5, 0))
 
     def setup_gui(self, game_running):
+        """Setup the GUI."""
         self.app.title(f"BlightVeil Kill Tracker v{self.local_version}")
         self.app.geometry("800x800")
         self.app.configure(bg="#484759")
@@ -97,192 +190,56 @@ class GUI():
             else:
                 self.log.error(f"setup_gui(): ERROR: banner not found at: {icon_path}")
         except Exception as e:
-            self.log.error(f"Error loading banner image: {e.__class__.__name__} {e}")
+            self.log.error(f"setup_gui(): Error loading banner image: {e.__class__.__name__} {e}")
 
         # Check for Updates
-        update_message = check_for_kt_updates()
-        if update_message:
-            update_label = tk.Label(
-                self.app,
-                text=update_message,
-                font=("Times New Roman", 12),
-                fg="#ff5555",
-                bg="#484759",
-                wraplength=700,
-                justify="center",
-                cursor="hand2",
-            )
-            update_label.pack(pady=(10, 10))
-            update_label.bind("<Button-1>", open_github(update_message))
+        try:
+            update_message = self.api.check_for_kt_updates()
+            if update_message:
+                update_label = self.create_label(
+                    self.app, text=update_message, font=("Times New Roman", 12), fg="#ff5555", bg="#484759", wraplength=700, justify="center", cursor="hand2"
+                )
+                update_label.pack(pady=(10, 10))
+                update_label.bind("<Button-1>", self.api.open_github(update_message))
+        except Exception as e:
+            self.log.error(f"setup_gui(): Error checking for Kill Tracker updates: {e.__class__.__name__} {e}")
 
         if not game_running:
-            # Relaunch Message
-            message_label = tk.Label(
-                self.app,
-                text="You must launch Star Citizen before starting the tracker.\n\nPlease close this window, launch Star Citizen, and relaunch the BV Kill Tracker. ",
-                font=("Times New Roman", 14),
-                fg="#000000",
-                bg="#484759",
-                wraplength=700,
-                justify="center",
-            )
-            message_label.pack(pady=(50, 10))
-            self.log = None
+            try:
+                # Relaunch Message
+                message_label = self.create_label(
+                    self.app,
+                    text="You must launch Star Citizen before starting the Kill Tracker.\n\nPlease close this window, launch Star Citizen, and relaunch the Kill Tracker. ",
+                    font=("Times New Roman", 14),
+                    fg="#000000",
+                    bg="#484759",
+                    wraplength=700,
+                    justify="center"
+                )
+                message_label.pack(pady=(50, 10))
+                #self.log = None #FIXME Why is this here?
+            except Exception as e:
+                self.log.error(f"setup_gui(): Error rendering the relaunch message: {e.__class__.__name__} {e}")
         else:
-            # API Key Input
-            key_frame = tk.Frame(self.app, bg="#484759")
-            key_frame.pack(pady=(10, 10))
-
-            key_label = tk.Label(
-                key_frame, text="Enter Key:", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
-            )
-            key_label.pack(side=tk.LEFT, padx=(0, 5))
-
-            key_entry = tk.Entry(key_frame, width=30, font=("Times New Roman", 12))
-            key_entry.pack(side=tk.LEFT)
-
-            # API Status Label
-            api_status_label = tk.Label(
-                self.app,
-                text="API Status: Not Validated",
-                font=("Times New Roman", 12),
-                fg="#ffffff",
-                bg="#484759",
-            )
-            api_status_label.pack(pady=(10, 10))
-
-            def activate_and_load_key():
-
-                def validate_api_key(api_key):
-                    url = "http://drawmyoshi.com:25966/validateKey"
-                    headers = {
-                        "Authorization": api_key,
-                        "Content-Type": "application/json"
-                    }
-                    data = {
-                        "api_key": api_key,
-                        "player_name": self.rsi_handle
-                    }
-
-                    try:
-                        response = requests.post(url, headers=headers, json=data)
-                        if not response.status_code == 200:
-                            logger.log(f"❌ API for key validation returned code {response.status_code} - {response.text}")
-                            return False
-                        return True
-                    except requests.RequestException as e:
-                        logger.log(f"❌ API key validation error: {e.__class__.__name__} {e}")
-                        return False
-                            
-                def save_api_key(key):
-                    try:
-                        with open("killtracker_key.cfg", "w") as f:
-                            f.write(key)
-                        api_key["value"] = key  # Make sure to save the key in the global api_key dictionary as well
-                        logger.log(f"✅ API key saved successfully: {key}")
-                    except Exception as e:
-                        logger.log(f"❌ Error saving API key: {e.__class__.__name__} {e}")
-
-                try:
-                    entered_key = key_entry.get().strip()  # Access key_entry here
-                except Exception as e:
-                    logger.log(f"❌ Error parsing API key: {e.__class__.__name__} {e}")
-
-                try:
-                    if not entered_key:
-                        logger.log("⚠️ No key was entered. Attempting to load saved key if it exists...")
-                        with open("killtracker_key.cfg", "r") as f:
-                            entered_key = f.readline().strip()
-                            if entered_key:
-                                api_key["value"] = entered_key  # Assign the loaded key
-                                logger.log(f"Saved key loaded: {entered_key}. Attempting to establish Servitor connection...")
-                except FileNotFoundError:
-                    logger.log("⚠️ No saved key found. Please enter a valid key.")
-                    api_status_label.config(text="API Status: Invalid", fg="red")
-
-                try:
-                    # Proceed with activation
-                    log_file_location = get_sc_log_location(logger)
-                    if log_file_location:
-                        get_player_name(log_file_location) # Get the global RSI handle
-                        if self.rsi_handle:
-                            if validate_api_key(entered_key):  # Pass both the key and player name
-                                save_api_key(entered_key)  # Save the key for future use
-                                logger.log("✅ Key activated and saved. Servitor connection established.")
-                                logger.log("✅ Go Forth And Slaughter...")
-                                api_status_label.config(text="API Status: Valid (Expires in 72 hours)", fg="green")
-                                start_api_key_countdown(entered_key, api_status_label)
-                            else:
-                                logger.log("⚠️ Invalid key or player name. Please enter a valid API key.")
-                                api_status_label.config(text="API Status: Invalid", fg="red")
-                        else:
-                            logger.log("⚠️ RSI Handle not found. Please ensure the game is running and the log file is accessible.")
-                            api_status_label.config(text="API Status: Error", fg="yellow")
-                    else:
-                        logger.log("⚠️ Log file location not found.")
-                        api_status_label.config(text="API Status: Error", fg="yellow")
-                except Exception as e:
-                    logger.log(f"❌ Error parsing API key: {e.__class__.__name__} {e}")
-            print('b')
-            # Update the button to use the new combined function
-            activate_load_key_button = tk.Button(
-                key_frame,
-                text="Activate & Load Key",
-                font=("Times New Roman", 12),
-                command=activate_and_load_key(),
-                bg="#000000",
-                fg="#ffffff",
-            )
-            activate_load_key_button.pack(side=tk.LEFT, padx=(5, 0))
-
-            # Commander Mode Button
-            commander_mode_button = tk.Button(
-                self.app,
-                text="Commander Mode",
-                font=("Times New Roman", 12),
-                command=lambda: open_commander_mode(logger),
-                bg="#000000",
-                fg="#ffffff",
-            )
-            commander_mode_button.pack(pady=(10, 10)) 
-
-            text_area.pack(padx=10, pady=10)
-
-            logger = AppLogger(text_area)
-            
-            # Define the function to toggle the state
-            def toggle_anonymize():
-                if anonymize_state["enabled"]:
-                    anonymize_state["enabled"] = False
-                    anonymize_button.config(text="Enable Anonymity - Not Anonymous")
-                else:
-                    anonymize_state["enabled"] = True
-                    anonymize_button.config(text="Disable Anonymity - Anonymous")
-                logger.log(f"Anonymize state changed: {anonymize_state['enabled']}")
-
-            # Add the button to the GUI
-            anonymize_button = tk.Button(
-                key_frame,
-                text="Enable Anonymity - Not Anonymous",
-                font=("Times New Roman", 12),
-                command=toggle_anonymize,
-                bg="#000000",
-                fg="#ffffff",
-            )
-            anonymize_button.pack(side=tk.LEFT, padx=(5, 0))
+            try:
+                self.add_module_buttons()
+            except Exception as e:
+                self.log.error(f"setup_gui(): Error rendering the module buttons: {e.__class__.__name__} {e}")
         
-
         # Footer
-        footer = tk.Frame(self.app, bg="#3e3b4d", height=30)
-        footer.pack(side=tk.BOTTOM, fill=tk.X)
+        try:
+            footer = tk.Frame(self.app, bg="#3e3b4d", height=30)
+            footer.pack(side=tk.BOTTOM, fill=tk.X)
 
-        footer_text = tk.Label(
-            footer,
-            text="BlightVeil Kill Tracker - Credits: CyberBully-Actual, BossGamer09, Holiday, Samurai",
-            font=("Times New Roman", 10),
-            fg="#bcbcd8",
-            bg="#3e3b4d",
-        )
-        footer_text.pack(pady=5)
+            footer_text = self.create_label(
+                footer,
+                text="BlightVeil Kill Tracker - Credits: CyberBully-Actual, BossGamer09, Holiday, SamuraiZero",
+                font=("Times New Roman", 10),
+                fg="#bcbcd8",
+                bg="#3e3b4d",
+            )
+            footer_text.pack(pady=5)
+        except Exception as e:
+            self.log.error(f"setup_gui(): Error rendering the footer: {e.__class__.__name__} {e}")
 
         return self.app

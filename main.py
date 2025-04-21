@@ -16,7 +16,7 @@ from queue import Queue
 
 # Import kill tracker modules
 from modules.api_client import API_Client
-from modules.commander_mode import CommanderMode
+from modules.commander_mode.cm_core import CommanderMode
 from modules.gui import GUI
 from modules.log_parser import LogParser
 from modules.sounds import Sounds
@@ -26,15 +26,13 @@ class KillTracker():
     """Official KillTracker for BlightVeil."""
     def __init__(self):
         self.local_version = "1.4"
-        self.api_key = {"value": None}
+        self.log = None
         #self.stop_event = threading.Event()
 
-        self.rsi_handle = ""
-        self.anonymize_state = {"enabled": False}
-        self.global_commander_heartbeat_active = False
-        self.heartbeat_active = False
-        self.heartbeat_daemon = None
-        
+        self.global_commander_heartbeat_status = False
+        self.heartbeat_status = {"active": False}
+        self.rsi_handle = {"current": "N/A"}
+        self.active_ship = {"current": "N/A"}
         self.update_queue = Queue()
     
     def check_if_process_running(self, process_name):
@@ -98,13 +96,32 @@ def main():
         print(f"main(): ERROR in checking if the game is running: {e.__class__.__name__} {e}")
 
     try:
-        gui = GUI()
-        gui.setup_gui(game_running, kt.local_version)
+        gui_module = GUI(kt.local_version)
+        log = gui_module.log # Used to pass logger ref to other modules
     except Exception as e:
-        print(f"main(): ERROR in setting up the GUI: {e.__class__.__name__} {e}")
-
+        print(f"main(): ERROR in setting up the GUI module: {e.__class__.__name__} {e}")
 
     try:
+        api_client_module = API_Client(log, gui_module, kt.local_version, kt.heartbeat_status, kt.rsi_handle, kt.update_queue)
+        gui_module.api = api_client_module
+    except Exception as e:
+        log.error(f"main(): ERROR in setting up the API Client module: {e.__class__.__name__} {e}")
+
+    try:
+        sound_module = Sounds(log)
+    except Exception as e:
+        log.error(f"main(): ERROR in setting up the Sounds module: {e.__class__.__name__} {e}")
+
+    try:
+        gui_module.setup_gui(game_running, kt.local_version)
+
+              else:
+                    self.log.log("⚠️ RSI Handle not found. Please ensure the game is running and the log file is accessible.")
+                    api_status_label.config(text="API Status: Error", fg="yellow")
+            else:
+                self.log.log("⚠️ Log file location not found.")
+                api_status_label.config(text="API Status: Error", fg="yellow")
+
         create_sounds_dir(logger)
         copy_success = copy_sounds(sounds_pyinst_dir, sounds_live_dir, logger)
         if copy_success:

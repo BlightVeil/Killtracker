@@ -100,7 +100,7 @@ def open_commander_mode(logger):
         commander_window,
         text="Connect to Commander",
         font=("Times New Roman", 12),
-        command=lambda: start_heartbeat_thread(logger),  # Pass logger here
+        command=lambda: self.start_heartbeat_thread(),  # Pass logger here
         bg="#000000",
         fg="#ffffff",
     )
@@ -111,7 +111,7 @@ def open_commander_mode(logger):
         commander_window,
         text="Disconnect",
         font=("Times New Roman", 12),
-        command=lambda:[stop_heartbeat_thread(logger), clear_listboxes()],
+        command=lambda:[self.stop_heartbeat_thread(), clear_listboxes()],
         bg="#000000",
         fg="#ffffff",
     )
@@ -249,3 +249,23 @@ def open_commander_mode(logger):
         connected_users_listbox.delete(0, tk.END)
         allocated_forces_listbox.delete(0, tk.END)
 
+    def start_heartbeat_thread(self) -> None:
+        """Start the heartbeat in a separate thread."""
+        if self.heartbeat_daemon and self.heartbeat_daemon.is_alive():
+            self.log.warning("Already connected to commander!")
+            return
+        self.log.info("Connecting to commander...")
+        self.heartbeat_daemon = Thread(target=self.post_heartbeat, args=())
+        self.heartbeat_daemon.daemon = True
+        self.heartbeat_daemon.start()
+
+    def stop_heartbeat_thread(self) -> None:
+        """Stop the heartbeat thread."""
+        if self.heartbeat_daemon and self.heartbeat_daemon.is_alive():
+            self.log.debug("Heartbeat is shutting down...")
+            self.heartbeat_status["active"] = False
+            self.heartbeat_daemon.join(timeout=10)
+            self.heartbeat_daemon = None
+            return
+        else:
+            self.log.error("Error: Failed to stop the heartbeat. No heartbeat exists.")

@@ -12,7 +12,6 @@ def resource_path(relative_path):
     try:
         return path.join(base_path, relative_path)
     except Exception as e:
-        print(f"❌ Error getting the absolute path to the resource path: {e.__class__.__name__} {e}")
         return relative_path
 
 def get_sc_log_path(directory, logger):
