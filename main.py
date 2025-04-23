@@ -1,13 +1,9 @@
-from os import listdir, path
+
 from sys import exit
 from psutil import process_iter
 import time
 import psutil
 import shutil
-from pathlib import Path
-
-import random
-import winsound
 import datetime
 import warnings
 warnings.filterwarnings("ignore", message="Couldn't find ffmpeg or avconv")
@@ -16,24 +12,27 @@ from queue import Queue
 
 # Import kill tracker modules
 from modules.api_client import API_Client
-from modules.commander_mode.cm_core import CommanderMode
 from modules.gui import GUI
 from modules.log_parser import LogParser
 from modules.sounds import Sounds
+from modules.commander_mode.cm_api import CM_API_Client
+from modules.commander_mode.cm_core import CM_Core
+from modules.commander_mode.cm_gui import CM_GUI
 import modules.helpers as Helpers
 
 class KillTracker():
-    """Official KillTracker for BlightVeil."""
+    """Official Kill Tracker for BlightVeil."""
     def __init__(self):
         self.local_version = "1.4"
         self.log = None
+        self.log_parser = None
         #self.stop_event = threading.Event()
+        self.is_monitoring = False
         self.anonymize_state = {"enabled": False}
         self.heartbeat_status = {"active": False}
         self.rsi_handle = {"current": "N/A"}
         self.active_ship = {"current": "N/A"}
         self.update_queue = Queue()
-        self.log_parser = None
     
     def check_if_process_running(self, process_name):
         """Check if a process is running by name."""
@@ -131,6 +130,8 @@ def main():
             auto_shutdown(app, 72 * 60 * 60, logger)  
         else:
             auto_shutdown(app, 72 * 60 * 60)
+
+        check_for_cm_updates
 
         app.mainloop()
 

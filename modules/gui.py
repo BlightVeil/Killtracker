@@ -51,7 +51,7 @@ class AppLogger():
 #########################################################################################################
 
 class GUI():
-    """Build and launch the GUI for the KillTracker."""
+    """GUI for the Kill Tracker."""
     def __init__(self, local_version, anonymize_state):
         self.local_version = local_version
         self.anonymize_state = anonymize_state

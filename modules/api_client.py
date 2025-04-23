@@ -5,7 +5,7 @@ from datetime import datetime
 from packaging import version
 
 class API_Client():
-    """Client that handles all API requests."""
+    """API client for the Kill Tracker."""
     def __init__(self, logger, gui, local_version, rsi_handle, update_queue):
         self.log = logger
         self.gui = gui
@@ -14,7 +14,6 @@ class API_Client():
         self.update_queue = update_queue
         self.heartbeat_interval = 5
         self.request_timeout = 12
-        self.heartbeat_daemon = None
         self.api_key = {"value": None}
         self.api_key_filename = "killtracker_key.cfg"
         self.api_fqdn = "http://drawmyoshi.com:25966"
