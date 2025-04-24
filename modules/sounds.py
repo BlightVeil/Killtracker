@@ -21,8 +21,8 @@ class Sounds():
             self.create_sounds_dir()
             copy_to_user_dir = self.copy_sounds(self.sounds_pyinst_dir, self.sounds_live_dir)
             if copy_to_user_dir:
-                self.log.info(f"Included sounds found at: {str(self.sounds_live_dir)}")
-                self.log.info(f"Sound Files inside: {listdir(str(self.sounds_live_dir)) if path.exists(str(self.sounds_live_dir)) else 'Not Found'}")
+                self.log.debug(f"Included sounds found at: {str(self.sounds_live_dir)}")
+                self.log.debug(f"Sound Files inside: {listdir(str(self.sounds_live_dir)) if path.exists(str(self.sounds_live_dir)) else 'Not Found'}")
                 self.log.success("To add new Sounds to the Kill Tracker, drop in .wav files to the sounds folder.")
         except Exception as e:
             self.log.error(f"setup_sounds(): Error: {e.__class__.__name__} {e}")
@@ -52,13 +52,13 @@ class Sounds():
         try:
             # Get the list of existing files in the source folder
             source_files = list(source.glob('**/*.wav'))
-            self.log.info(f"Found source files {source_files}")
+            self.log.debug(f"Copying sound files {source_files}")
             for sound_file in source_files:
                 target_path = target / sound_file
                 # Check if targets doesn't exist
                 if not target_path.exists():
                     shutil.copy(sound_file, target_path)
-                    self.log.info(f"Copied sound: {sound_file} to {target_path}")
+                    self.log.debug(f"Copied sound: {sound_file} to {target_path}")
             return True
         except Exception as e:
             self.log.error(f"Error copying sounds: {e.__class__.__name__} {e}")

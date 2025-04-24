@@ -54,6 +54,10 @@ class LogParser():
                 if self.api.api_key["value"]:
                     break
                 sleep(1)
+        except Exception as e:
+            self.log.error(f"Error waiting for Servitor connection to be established: {e.__class__.__name__} {e}")
+
+        try:
             # Read all lines to find out what game mode player is currently, in case they booted up late.
             # Don't upload kills, we don't want repeating last session's kills in case they are actually available.
             self.log.info("Loading old log (if available)! Note that old kills shown will not be uploaded as they are stale.")
@@ -63,12 +67,19 @@ class LogParser():
                     self.log.error("Error: API key is invalid. Loading old log stopped.")
                     break
                 self.read_log_line(line, False)
-
+        except Exception as e:
+            self.log.error(f"Error reading old log file: {e.__class__.__name__} {e}")
+        
+        try:
             # Main loop to monitor the log
             last_log_file_size = stat(self.log_file_location).st_size
             self.log.success("Kill Tracking initiated.")
             self.log.success("Go Forth And Slaughter...")
-            while self.monitoring["active"]:
+        except Exception as e:
+            self.log.error(f"Error getting log file size: {e.__class__.__name__} {e}")
+        
+        while self.monitoring["active"]:
+            try:
                 if not self.api.api_key["value"]:
                     self.log.error("Error: API key is invalid. Kill Tracking is not active...")
                     sleep(5)
@@ -84,9 +95,9 @@ class LogParser():
                         last_log_file_size = stat(self.log_file_location).st_size
                 else:
                     self.read_log_line(line, True)
-            self.log.info("Game log monitoring has stopped.")
-        except Exception as e:
-            self.log.error(f"Error tailing log file: {e.__class__.__name__} {e}")
+            except Exception as e:
+                self.log.error(f"Error reading game log file: {e.__class__.__name__} {e}")
+        self.log.info("Game log monitoring has stopped.")
 
     def read_log_line(self, line:str, upload_kills:bool) -> None:
         """Event checking logic. Look for substrings, do stuff based on what we find."""
@@ -97,21 +108,23 @@ class LogParser():
             self.set_ac_ship(line)
         elif ((-1 != line.find("<Vehicle Destruction>")) or (
                 -1 != line.find("<local client>: Entering control state dead"))) and (
-                -1 != line.find(self.active_ship_id)):
-            self.destroy_player_zone()
+                -1 != line.find(self.active_ship_id)) and self.cm.heartbeat_status["active"]:
+                self.destroy_player_zone()
         elif -1 != line.find(self.rsi_handle["current"]):
-            if -1 != line.find("OnEntityEnterZone"):
-                self.set_player_zone(line)
+            if -1 != line.find("OnEntityEnterZone") and self.cm.heartbeat_status["active"]:
+                    self.set_player_zone(line)
             if -1 != line.find("CActor::Kill") and not self.check_substring_list(line, self.ignore_kill_substrings) and upload_kills:
                 kill_result = self.parse_kill_line(line, self.rsi_handle["current"])
+                self.log.debug(f"Kill Result: {kill_result}")
                 if kill_result["result"] == "exclusion":
                     return
                 elif kill_result["result"] == "own_death":
                     # Log a message for the player's own death
                     self.log.info("You have fallen in the service of BlightVeil.")
                     # Send death-event to the server via heartbeat
-                    self.cm.post_heartbeat_death_event(kill_result["data"]["player"], kill_result["data"]["zone"])
-                    self.destroy_player_zone()
+                    if self.cm.heartbeat_status["active"]:
+                        self.cm.post_heartbeat_death_event(kill_result["data"]["player"], kill_result["data"]["zone"])
+                        self.destroy_player_zone()
                 elif kill_result["result"] == "other_kill":
                     self.log.success(f"You have killed {kill_result['data']['victim']},")
                     self.log.info(f"and brought glory to BlightVeil.")
@@ -190,7 +203,7 @@ class LogParser():
     def parse_kill_line(self, line:str, target_name:str):
         """Parse kill event."""
         try:
-            kill_result = {"result": "", "data": None}
+            kill_result = {"result": "", "data": {}}
 
             if not self.check_exclusion_scenarios(line):
                 kill_result["result"] = "exclusion"
@@ -208,7 +221,10 @@ class LogParser():
             if killed == killer or killer.lower() == "unknown" or killed == target_name:
                 # Log a message for the player's own death
                 kill_result["result"] = "own_death"
-                kill_result["data"] = killed_zone
+                kill_result["data"] = {
+                    'player': target_name,
+                    'zone': killed_zone
+                }
             else:
                 kill_result["result"] = "other_kill"
                 kill_result["data"] = {

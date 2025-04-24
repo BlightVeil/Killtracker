@@ -56,14 +56,14 @@ class KillTracker():
             if not rsi_launcher_path:
                 self.log.warning("RSI Launcher not running.")
                 return ""
-            self.log.success(f"RSI Launcher running at: {rsi_launcher_path}")
+            self.log.debug(f"RSI Launcher running at: {rsi_launcher_path}")
 
             # Check if Star Citizen Launcher is running
             sc_launcher_path = self.check_if_process_running("StarCitizen")
             if not sc_launcher_path:
                 self.log.warning("Star Citizen Launcher not running.")
                 return ""
-            self.log.success(f"Star Citizen Launcher running at: {sc_launcher_path}")
+            self.log.debug(f"Star Citizen Launcher running at: {sc_launcher_path}")
             return sc_launcher_path
         except Exception as e:
             self.log.error(f"get_sc_processes(): Error: {e.__class__.__name__} {e}")
@@ -73,13 +73,13 @@ class KillTracker():
         try:
             game_log_path = path.join(directory, 'Game.log')
             if path.exists(game_log_path):
-                self.log.success(f"Found Game.log in: {directory}")
+                self.log.debug(f"Found Game.log in: {directory}")
                 return game_log_path
             # If not found in the same directory, check the parent directory
             parent_directory = path.dirname(directory)
             game_log_path = path.join(parent_directory, 'Game.log')
             if path.exists(game_log_path):
-                self.log.success(f"Found Game.log in parent directory: {parent_directory}")
+                self.log.debug(f"Found Game.log in parent directory: {parent_directory}")
                 return game_log_path
         except Exception as e:
             self.log.error(f"get_sc_log_path(): Error: {e.__class__.__name__} {e}")
@@ -89,7 +89,7 @@ class KillTracker():
         try:
             # Search for Game.log in the folder next to StarCitizen_Launcher.exe
             star_citizen_dir = path.dirname(sc_launcher_path)
-            self.log.info(f"Searching for Game.log in directory: {star_citizen_dir}")
+            self.log.debug(f"Searching for Game.log in directory: {star_citizen_dir}")
             log_path = self.get_sc_log_path(star_citizen_dir)
 
             if log_path:
@@ -189,6 +189,8 @@ def main():
     
     if game_running:
         try:
+            #TODO Make a module import framework to easily add in future modules
+
             # Used to pass logger ref to other modules
             log = gui_module.log
             # Add logger ref to main class
@@ -201,12 +203,15 @@ def main():
             print(f"main(): ERROR in setting up the app loggers: {e.__class__.__name__} {e}")
 
         try:
+            sound_module.setup_sounds()
+            # Kill Tracker monitor loop
             Thread(target=kt.monitor_game_state, daemon=True).start()
             kt.auto_shutdown(gui_module.app, 72 * 60 * 60)
         except Exception as e:
             print(f"main(): ERROR starting game state monitoring: {e.__class__.__name__} {e}")
     
     try:
+        # GUI main loop
         gui_module.app.mainloop()
     except Exception as e:
         print(f"main(): ERROR starting GUI main loop: {e.__class__.__name__} {e}")
