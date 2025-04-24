@@ -2,18 +2,7 @@ import requests
 from time import sleep
 
 class CM_API_Client():
-    """Commander Mode API module for the Kill Tracker."""
-    def __init__(self, logger, heartbeat_status, rsi_handle, active_ship, update_queue, api_key, api_fqdn, request_timeout):
-        self.log = logger
-        self.heartbeat_status = heartbeat_status
-        self.rsi_handle = rsi_handle
-        self.active_ship = active_ship
-        self.update_queue = update_queue        
-        self.api_key = api_key
-        self.api_fqdn = api_fqdn
-        self.request_timeout = request_timeout
-        self.heartbeat_interval = 5
-    
+    """Commander Mode API module for the Kill Tracker."""    
     def post_heartbeat_death_event(self, target_name:str, killed_zone:str) -> None:
         """Currently only support death events from the player!"""
         try:

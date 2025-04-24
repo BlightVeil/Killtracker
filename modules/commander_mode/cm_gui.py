@@ -2,30 +2,23 @@ import tkinter as tk
 
 class CM_GUI():
     """Commander Mode API module for the Kill Tracker."""
-    def __init__(self, logger, api_client_module):
-        self.log = logger
-        self.api = api_client_module
-        self.commander_window = tk.Toplevel()
-        self.connected_users_listbox = None
-        self.allocated_forces_listbox = None
-
-    def connected_users_insert(self, player_data):
+    def connected_users_insert(self, player_data:str) -> None:
         """Insert into connected users GUI element"""
         self.connected_users_listbox.insert(tk.END, player_data)
 
-    def connected_users_delete(self):
+    def connected_users_delete(self) -> None:
         """Delete from connected users GUI element"""
         self.connected_users_listbox.delete(0, tk.END)
 
-    def allocated_forces_insert(self, player_data):
+    def allocated_forces_insert(self, player_data:str) -> None:
         """Insert into allocated forces GUI element"""
         self.allocated_forces_listbox.insert(tk.END, player_data)
 
-    def allocated_forces_delete(self):
+    def allocated_forces_delete(self) -> None:
         """Delete from allocated forces GUI element"""
         self.allocated_forces_listbox.delete(0, tk.END)
 
-    def config_search_bar(self, widget, placeholder_text):
+    def config_search_bar(self, widget:tk.Entry, placeholder_text:str) -> None:
         """Handle search bar for filtering connected users."""
         def remove_placeholder(event):
             placeholder_text = getattr(event.widget, "placeholder", "")
@@ -44,25 +37,27 @@ class CM_GUI():
         widget.bind("<FocusIn>", remove_placeholder)
         widget.bind("<FocusOut>", add_placeholder)
 
-    def open_commander_mode(self):
+    def open_commander_mode(self) -> None:
         """
         Opens a new window for Commander Mode, displaying connected users and allocated forces.
         Includes functionality for moving users to the allocated forces list and handling status changes.
         """
-        self.commander_window.title("Commander Mode")
-        self.commander_window.minsize(width=1280, height=720)
-        self.commander_window.configure(bg="#484759")
-        self.commander_window.protocol("WM_DELETE_WINDOW", self.destroy_window)
+        commander_window = tk.Toplevel()
+        commander_window.title("Commander Mode")
+        commander_window.minsize(width=1280, height=720)
+        commander_window.configure(bg="#484759")
+        # Stop heartbeat if Commander Mode window is closed
+        #commander_window.protocol("WM_DELETE_WINDOW", self.destroy_window(commander_window)) #FIXME
 
         # Search bar for filtering connected users
         search_var = tk.StringVar()
-        search_bar = tk.Entry(self.commander_window, textvariable=search_var, font=("Consolas", 12), width=30)
+        search_bar = tk.Entry(commander_window, textvariable=search_var, font=("Consolas", 12), width=30)
         self.config_search_bar(search_bar, "Search Connected Users...")
         search_bar.pack(pady=(10, 0))
 
         # Connected Users Listbox
         connected_users_frame = tk.Frame(
-            self.commander_window, bg="#484759"
+            commander_window, bg="#484759"
         )
         connected_users_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 5), pady=(5, 10))
 
@@ -78,7 +73,7 @@ class CM_GUI():
 
         # Allocated Forces Listbox
         allocated_forces_frame = tk.Frame(
-            self.commander_window, bg="#484759"
+            commander_window, bg="#484759"
         )
         allocated_forces_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 10), pady=(5, 10))
 
@@ -94,24 +89,24 @@ class CM_GUI():
 
         # Add User To Fleet Button
         add_user_to_fleet_button = tk.Button(
-            self.commander_window, text="Add User to Fleet", font=("Times New Roman", 12), command=lambda: self.cm_core.allocate_selected_users(), bg="#000000", fg="#ffffff"
+            commander_window, text="Add User to Fleet", font=("Times New Roman", 12), command=self.allocate_selected_users, bg="#000000", fg="#ffffff"
         )
         add_user_to_fleet_button.pack(pady=(10, 10))
 
         # Add All To Fleet Button
         add_all_to_fleet_button = tk.Button(
-            self.commander_window, text="Add All Users to Fleet", font=("Times New Roman", 12), command=lambda: self.cm_core.allocate_all_users(), bg="#000000", fg="#ffffff"
+            commander_window, text="Add All Users to Fleet", font=("Times New Roman", 12), command=self.allocate_all_users, bg="#000000", fg="#ffffff"
         )
         add_all_to_fleet_button.pack(pady=(10, 10))
         
         start_heartbeat_button = tk.Button(
-            self.commander_window, text="Connect to Commander", font=("Times New Roman", 12), command=lambda: self.cm_core.start_heartbeat_thread(), bg="#000000", fg="#ffffff"
+            commander_window, text="Connect to Commander", font=("Times New Roman", 12), command=self.start_heartbeat_threads, bg="#000000", fg="#ffffff"
         )
         start_heartbeat_button.pack(pady=(10, 10))
 
         # Close Button
         dc_button = tk.Button(
-            self.commander_window, text="Disconnect", font=("Times New Roman", 12), command=lambda:[self.cm_core.stop_heartbeat_thread(), self.cm_core.clear_listboxes()], bg="#000000", fg="#ffffff"
+            commander_window, text="Disconnect", font=("Times New Roman", 12), command=[self.stop_heartbeat_threads, self.clear_listboxes], bg="#000000", fg="#ffffff"
         )
         dc_button.pack(pady=(10, 10))
 
@@ -119,14 +114,14 @@ class CM_GUI():
         def search_users(*args):
             search_query = search_var.get().lower()
             self.connected_users_listbox.delete(0, tk.END)
-            if self.cm_core.connected_users:
-                for user in self.cm_core.connected_users:
+            if self.connected_users:
+                for user in self.connected_users:
                     if search_query in user['player'].lower():
                         self.connected_users_listbox.insert(tk.END, user['player'])
 
         search_var.trace("w", search_users)
     
-    def destroy_window(self):
+    def destroy_window(self, commander_window) -> None:
         """Stop heartbeat if window is closed"""
-        self.commander_window.destroy()
-        self.cm_core.stop_heartbeat_thread()
+        commander_window.destroy()
+        self.stop_heartbeat_threads()

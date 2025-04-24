@@ -6,17 +6,16 @@ from packaging import version
 
 class API_Client():
     """API client for the Kill Tracker."""
-    def __init__(self, logger, gui, local_version, rsi_handle, update_queue):
-        self.log = logger
+    def __init__(self, gui, local_version, rsi_handle):
+        self.log = None
         self.gui = gui
         self.local_version = local_version
         self.rsi_handle = rsi_handle
-        self.update_queue = update_queue
-        self.heartbeat_interval = 5
         self.request_timeout = 12
         self.api_key = {"value": None}
         self.api_key_filename = "killtracker_key.cfg"
         self.api_fqdn = "http://drawmyoshi.com:25966"
+        self.expiration_time = None
 
 
 #########################################################################################################
@@ -64,16 +63,16 @@ class API_Client():
 #########################################################################################################
 
 
-    def validate_api_key(self) -> bool:
+    def validate_api_key(self, key) -> bool:
         """Validate the API key."""
         try:
             url = f"{self.api_fqdn}/validateKey"
             headers = {
-                "Authorization": self.api_key,
+                "Authorization": key,
                 "Content-Type": "application/json"
             }
             api_key_data = {
-                "api_key": self.api_key,
+                "api_key": key,
                 "player_name": self.rsi_handle["current"]
             }
             response = requests.post(
@@ -94,20 +93,18 @@ class API_Client():
         """Load the API key."""
         with open(self.api_key_filename, "r") as f:
             entered_key = f.readline().strip()
-            if entered_key:
-                self.api_key["value"] = entered_key
-                self.log.success(f"Saved key loaded: {entered_key}. Attempting to establish Servitor connection...")
-            else:
-                self.api_key["value"] = None
-                self.log.error("No saved key found in file. Please get a new key from the key generator.")
-                self.gui.api_status_label.config(text="API Status: Invalid", fg="red")
+        if entered_key:
+            self.log.success(f"Saved key loaded: {entered_key}. Attempting to establish Servitor connection...")
+        else:
+            self.log.error("No saved key found in file. Please get a new key from the key generator.")
+            self.gui.api_status_label.config(text="API Status: Invalid", fg="red")
+        return entered_key
     
     def save_api_key(self, key:str) -> None:
         """Save the API key."""
         with open(self.api_key_filename, "w") as f:
             f.write(key)
         self.api_key["value"] = key
-        self.log.success(f"save_api_key(): API key saved successfully: {key}")
 
     def load_activate_key(self) -> None:
         """Activate and load the API key."""
@@ -117,27 +114,26 @@ class API_Client():
             self.log.error(f"load_activate_key(): Error parsing API key: {e.__class__.__name__} {e}")
         try:
             if not entered_key:
-                self.load_api_key()
+                entered_key = self.load_api_key()
         except FileNotFoundError:
             self.log.error("No saved key found. Please enter a valid key.")
             self.gui.api_status_label.config(text="API Status: Invalid", fg="red")  # Access api_status_label in GUI here
             return
         try:
             # Proceed with activation
-                if self.rsi_handle["current"] != "N/A":
-                    if self.validate_api_key(entered_key):
-                        self.save_api_key(entered_key)  # Save the key for future use
-                        self.log.success("Key activated and saved. Servitor connection established.")
-                        self.log.success("Go Forth And Slaughter...")
-                        self.gui.api_status_label.config(text="API Status: Valid (Expires in 72 hours)", fg="green")
-                        self.start_api_key_countdown(entered_key)
-                    else:
-                        self.log.error("Error: Invalid API key. Please enter a valid API key.")
-                        self.api_key["value"] = None
-                        self.gui.api_status_label.config(text="API Status: Invalid", fg="red")
+            if self.rsi_handle["current"] != "N/A":
+                if self.validate_api_key(entered_key):
+                    self.save_api_key(entered_key)  # Save the key for future use
+                    self.log.success("Key activated and saved. Servitor connection established.")
+                    self.gui.api_status_label.config(text="API Status: Valid (Expires in 72 hours)", fg="green")
+                    self.start_api_key_countdown()
                 else:
-                    self.log.error("Error: Invalid RSI handle name.")
+                    self.log.error("Error: Invalid API key. Please enter a valid API key.")
+                    self.api_key["value"] = None
                     self.gui.api_status_label.config(text="API Status: Invalid", fg="red")
+            else:
+                self.log.error("Error: Invalid RSI handle name.")
+                self.gui.api_status_label.config(text="API Status: Invalid", fg="red")
         except Exception as e:
             self.log.error(f"Error activating API key: {e.__class__.__name__} {e}")
 
@@ -150,7 +146,7 @@ class API_Client():
             
             url = f"{self.api_fqdn}/validateKey"
             headers = {
-                "Authorization": self.api_key,
+                "Authorization": self.api_key["value"],
                 "Content-Type": "application/json"
             }
             api_key_exp_time = {
@@ -183,37 +179,35 @@ class API_Client():
     # FIXME THIS WHOLE FUNCTION NEEDS A REFACTOR, IT'S GIVING ME AN ANEURYSM - Samurai
     def start_api_key_countdown(self) -> None:
         """Start the countdown for the API key's expiration, refreshing expiry data periodically."""
-        def countdown():
+        def countdown(expiration_time):
             """Calculate the remaining time."""
-            remaining_time = expiration_time - datetime.datetime.utcnow()
+            remaining_time = expiration_time - datetime.utcnow()
             if remaining_time.total_seconds() > 0:
                 hours, remainder = divmod(remaining_time.seconds, 3600)
                 minutes, seconds = divmod(remainder, 60)
                 countdown_text = f"API Status: Valid (Expires in {remaining_time.days}d {hours}h {minutes}m {seconds}s)"
                 self.gui.api_status_label.config(text=countdown_text, fg="green")
-                self.gui.api_status_label.after(1000, countdown)  # Update every second
+                self.gui.api_status_label.after(1000, countdown(expiration_time))  # Update every second
             else:
                 self.gui.api_status_label.config(text="API Status: Expired", fg="red")
 
         def fetch_expiration_time():
             """Fetch expiration time in a separate thread and update countdown."""
-            thread = Thread(target=threaded_request)
-            thread.daemon = True
-            thread.start()
+            Thread(target=threaded_request, daemon=True).start()
 
         def threaded_request():
             """Get the expiration time."""
-            expiration_time = self.post_api_key_expiration_time(self.api_key)  # Fetch latest expiration time
+            expiration_time = self.post_api_key_expiration_time()  # Fetch latest expiration time
+            #self.log.debug(f"Current expiration time of API key: {expiration_time}")
             if not expiration_time:
                 self.gui.api_status_label.config(text="API Status: Expired", fg="red")
                 return
 
-            countdown()
+            countdown(expiration_time)
 
             # Refresh expiration time every 60 seconds in a new thread
             self.gui.api_status_label.after(60000, fetch_expiration_time)
 
-        expiration_time = None
         fetch_expiration_time()  # Initial call
 
 

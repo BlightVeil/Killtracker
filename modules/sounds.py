@@ -10,9 +10,8 @@ import modules.helpers as Helpers
 
 class Sounds():
     """Sounds module for the Kill Tracker."""
-    def __init__(self, logger, api_client_module):
-        self.log = logger
-        self.api = api_client_module
+    def __init__(self):
+        self.log = None
         self.sounds_pyinst_dir = None
         self.sounds_live_dir = None
 
