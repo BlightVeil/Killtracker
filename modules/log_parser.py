@@ -35,7 +35,8 @@ class LogParser():
 
     def start_tail_log_thread(self) -> None:
         """Start the log tailing in a separate thread only if it's not already running."""
-        Thread(target=self.tail_log, daemon=True).start()
+        thr = Thread(target=self.tail_log, daemon=True)
+        thr.start()
 
     def tail_log(self) -> None:
         """Read the log file and display events in the GUI."""
@@ -115,7 +116,7 @@ class LogParser():
                     self.set_player_zone(line)
             if -1 != line.find("CActor::Kill") and not self.check_substring_list(line, self.ignore_kill_substrings) and upload_kills:
                 kill_result = self.parse_kill_line(line, self.rsi_handle["current"])
-                self.log.debug(f"Kill Result: {kill_result}")
+                #self.log.debug(f"Kill Result: {kill_result}")
                 if kill_result["result"] == "exclusion":
                     return
                 elif kill_result["result"] == "own_death":

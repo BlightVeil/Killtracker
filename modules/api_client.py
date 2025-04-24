@@ -193,7 +193,8 @@ class API_Client():
 
         def fetch_expiration_time():
             """Fetch expiration time in a separate thread and update countdown."""
-            Thread(target=threaded_request, daemon=True).start()
+            thr = Thread(target=threaded_request, daemon=True)
+            thr.start()
 
         def threaded_request():
             """Get the expiration time."""

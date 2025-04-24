@@ -111,23 +111,28 @@ class CM_Core(CM_API_Client, CM_GUI):
         try:
             if not self.heartbeat_daemon and not self.cm_update_daemon:
                 self.log.info("Connecting to Commander...")
-                self.heartbeat_daemon = Thread(target=self.post_heartbeat, daemon=True).start()
-                self.cm_update_daemon = Thread(target=self.check_for_cm_updates, daemon=True).start()
+                self.heartbeat_daemon = Thread(target=self.post_heartbeat, daemon=True)
+                self.heartbeat_daemon.start()
+                self.cm_update_daemon = Thread(target=self.check_for_cm_updates, daemon=True)
+                self.cm_update_daemon.start()
             else:
-                raise Exception("Already connected to commander!.")
+                raise Exception("Already connected to commander!")
         except Exception as e:
             self.log.error(f"Error(): {e}")
 
     def stop_heartbeat_threads(self) -> None:
         """Stop the heartbeat thread."""
         try:
-            if self.heartbeat_daemon and self.heartbeat_daemon.is_alive():
-                self.log.debug("Commander is shutting down...")
+            if (isinstance(self.heartbeat_daemon, Thread) and self.heartbeat_daemon.is_alive() and 
+                isinstance(self.cm_update_daemon, Thread) and self.cm_update_daemon.is_alive()
+            ):
+                self.log.info("Commander is shutting down...")
                 self.heartbeat_status["active"] = False
                 self.heartbeat_daemon.join(self.join_timeout)
                 self.heartbeat_daemon = None
                 self.cm_update_daemon.join(self.join_timeout)
                 self.cm_update_daemon = None
+                self.clear_listboxes()
             else:
                 raise Exception("Commander Mode is not connected.")
         except Exception as e:

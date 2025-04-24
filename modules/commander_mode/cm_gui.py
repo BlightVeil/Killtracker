@@ -106,7 +106,7 @@ class CM_GUI():
 
         # Close Button
         dc_button = tk.Button(
-            commander_window, text="Disconnect", font=("Times New Roman", 12), command=[self.stop_heartbeat_threads, self.clear_listboxes], bg="#000000", fg="#ffffff"
+            commander_window, text="Disconnect", font=("Times New Roman", 12), command=self.stop_heartbeat_threads, bg="#000000", fg="#ffffff"
         )
         dc_button.pack(pady=(10, 10))
 
