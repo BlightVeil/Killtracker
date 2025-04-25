@@ -70,7 +70,7 @@ class Sounds():
         if sounds:
             sound_to_play = choice(sounds)  # Select a random sound
             try:
-                self.log(f"Playing sound: {sound_to_play.name}")
+                self.log.debug(f"Playing sound: {sound_to_play.name}")
                 winsound.PlaySound(str(sound_to_play), winsound.SND_FILENAME | winsound.SND_ASYNC)  # Play the selected sound
                 sleep(1)
             except Exception as e:
