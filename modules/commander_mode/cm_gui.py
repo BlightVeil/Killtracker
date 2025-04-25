@@ -91,7 +91,7 @@ class CM_GUI():
         add_user_to_fleet_button = tk.Button(
             commander_window, text="Add User to Fleet", font=("Times New Roman", 12), command=self.allocate_selected_users, bg="#000000", fg="#ffffff"
         )
-        add_user_to_fleet_button.pack(pady=(10, 10))
+        add_user_to_fleet_button.pack(pady=(30, 10))
 
         # Add All To Fleet Button
         add_all_to_fleet_button = tk.Button(

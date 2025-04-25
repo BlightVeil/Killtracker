@@ -7,6 +7,8 @@ from os import path
 
 # Import kill tracker modules
 import modules.helpers as Helpers
+# Import global settings
+import global_settings
 
 #########################################################################################################
 ### LOGGER CLASS                                                                                      ###
@@ -28,7 +30,8 @@ class AppLogger():
     
     @Decorator
     def debug(self, log_time, message):
-        self.text_widget.insert(tk.END, log_time + " DEBUG " + message + "\n")
+        if global_settings.DEBUG_MODE["enabled"]:
+            self.text_widget.insert(tk.END, log_time + " DEBUG " + message + "\n")
 
     @Decorator
     def info(self, log_time, message):
@@ -65,20 +68,31 @@ class GUI():
     def setup_app_log_display(self):
         """Setup app logging in a text display area."""
         text_area = scrolledtext.ScrolledText(
-            self.app, wrap=tk.WORD, width=80, height=20, state=tk.DISABLED, bg="#282a36", fg="#f8f8f2", font=("Consolas", 12)
+            self.app, wrap=tk.WORD, width=100, height=20, state=tk.DISABLED, bg="#282a36", fg="#f8f8f2", font=("Consolas", 12)
         )
         return text_area
     
     def toggle_anonymize(self):
-        """Setup anonymize button."""
+        """Handle anonymize button."""
         if self.anonymize_state["enabled"]:
             self.anonymize_state["enabled"] = False
-            self.anonymize_button.config(text="Enable Anonymity - Not Anonymous")
-            self.log.success(f"You are now not in anonymous mode.")
+            self.anonymize_button.config(text=" Enable Anonymity ", bg='#000000')
+            self.log.error(f"You are not anonymous.")
         else:
             self.anonymize_state["enabled"] = True
-            self.anonymize_button.config(text="Disable Anonymity - Anonymous")
-            self.log.success(f"You are now anonymous.")
+            self.anonymize_button.config(text="Anonymity Enabled", bg='#04B431')
+            self.log.success(f"You are anonymous.")
+
+    def toggle_debug(self):
+        """Handle debug button."""
+        if global_settings.DEBUG_MODE["enabled"]:
+            global_settings.DEBUG_MODE["enabled"] = False
+            self.debug_button.config(text=" Enable Debug Mode ", bg='#000000')
+            self.log.error(f"Turned off Debug Mode.")
+        else:
+            global_settings.DEBUG_MODE["enabled"] = True
+            self.debug_button.config(text="Debug Mode Enabled", bg='#04B431')
+            self.log.success(f"Turned on Debug Mode.")
 
     def async_loading_animation(self) -> None:
         def animate():
@@ -122,14 +136,14 @@ class GUI():
 
     def add_module_buttons(self):
         """Add buttons for modules."""
-        # API Key Input
+        # API Key Input Frame
         key_frame = tk.Frame(self.app, bg="#484759")
         key_frame.pack(pady=(10, 10))
 
         key_label = self.create_label(
             key_frame, text="Enter Key:", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
         )
-        key_label.pack(side=tk.LEFT, padx=(0, 5))
+        key_label.pack(side=tk.LEFT, padx=(50, 5))
 
         self.key_entry = tk.Entry(key_frame, width=30, font=("Times New Roman", 12))
         self.key_entry.pack(side=tk.LEFT)
@@ -146,21 +160,29 @@ class GUI():
         )
         activate_load_key_button.pack(side=tk.LEFT, padx=(5, 0))
 
+        # Options Frame
+        options_frame = tk.Frame(self.app, bg="#484759")
+        options_frame.pack(pady=(10, 10))
+
         # Commander Mode Button
         commander_mode_button = self.create_button(
-            self.app, text="Commander Mode", font=("Times New Roman", 12), command=self.cm.open_commander_mode, bg="#000000", fg="#ffffff"
+            options_frame, text="Commander Mode", font=("Times New Roman", 12), command=self.cm.open_commander_mode, bg="#000000", fg="#ffffff"
         )
-        commander_mode_button.pack(pady=(10, 10))
+        commander_mode_button.pack(side=tk.LEFT, pady=(10, 10))
 
         # App log text area
         self.log = AppLogger(self.setup_app_log_display())
         self.log.text_widget.pack(padx=10, pady=10)
 
-        # Add the button to the GUI
         self.anonymize_button = self.create_button(
-            key_frame, text="Enable Anonymity - Not Anonymous", font=("Times New Roman", 12), command=self.toggle_anonymize, bg="#000000", fg="#ffffff"
+            options_frame, text=" Enable Anonymity ", font=("Times New Roman", 12), command=self.toggle_anonymize, bg="#000000", fg="#ffffff"
         )
         self.anonymize_button.pack(side=tk.LEFT, padx=(5, 0))
+
+        self.debug_button = self.create_button(
+            options_frame, text=" Enable Debug Mode ", font=("Times New Roman", 12), command=self.toggle_debug, bg="#000000", fg="#ffffff"
+        )
+        self.debug_button.pack(side=tk.RIGHT, padx=(5, 0), pady=(5, 5))
 
     def setup_gui(self, game_running):
         """Setup the GUI."""
@@ -168,7 +190,9 @@ class GUI():
         try:
             self.app = tk.Tk(useTk=True)
             self.app.title(f"BlightVeil Kill Tracker v{self.local_version}")
-            self.app.geometry("800x800")
+            #self.app.geometry("800x800")
+            self.app.minsize(width=800, height=800)
+            self.app.maxsize(width=800, height=800)
             self.app.configure(bg="#484759")
         except Exception as e:
             self.log.error(f"setup_gui(): ERROR: Init setup failed: {e.__class__.__name__} {e}")
@@ -192,7 +216,7 @@ class GUI():
                 banner_image = tk.PhotoImage(file=banner_path)
                 banner_label = tk.Label(self.app, image=banner_image, bg="#484759")
                 banner_label.image = banner_image
-                banner_label.pack(pady=(0, 10))
+                banner_label.pack(pady=(10, 0))
             else:
                 self.log.error(f"setup_gui(): ERROR: banner not found at: {icon_path}")
         except Exception as e:
