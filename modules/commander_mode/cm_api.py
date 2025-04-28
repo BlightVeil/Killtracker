@@ -10,7 +10,7 @@ class CM_API_Client():
                 self.log.error("Error: death event will not be sent because the key does not exist.")
                 return
             if not self.heartbeat_status["active"]:
-                self.log.error("Error: Heartbeat is not active. Enter ship event will not be sent.")
+                self.log.error("Error: Heartbeat is not active. Death event will not be sent.")
                 return
 
             url = f"{self.api_fqdn}/validateKey" # API endpoint is setup to receive heartbeats
