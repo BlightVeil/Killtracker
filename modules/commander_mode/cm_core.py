@@ -6,8 +6,9 @@ from modules.commander_mode.cm_gui import CM_GUI
 
 class CM_Core(CM_API_Client, CM_GUI):
     """Commander Mode core module for the Kill Tracker."""
-    def __init__(self, api_module, monitoring, heartbeat_status, rsi_handle, active_ship, update_queue):
+    def __init__(self, gui_module, api_module, monitoring, heartbeat_status, rsi_handle, active_ship, update_queue):
         self.log = None
+        self.gui = gui_module
         self.api_key = api_module.api_key
         self.api_fqdn = api_module.api_fqdn
         self.request_timeout = api_module.request_timeout
@@ -16,6 +17,9 @@ class CM_Core(CM_API_Client, CM_GUI):
         self.rsi_handle = rsi_handle
         self.active_ship = active_ship
         self.update_queue = update_queue
+        self.heartbeat_daemon = None
+        self.cm_update_daemon = None
+        self.commander_window = None
         self.connected_users = []
         self.connected_users_listbox = None
         self.alloc_users = []
@@ -23,8 +27,6 @@ class CM_Core(CM_API_Client, CM_GUI):
         self.connect_commander_button = None
         self.join_timeout = 10
         self.heartbeat_interval = 5
-        self.heartbeat_daemon = None
-        self.cm_update_daemon = None
 
     def allocate_selected_users(self) -> None:
         """Allocate selected Connected Users to Allocated Forces."""
@@ -84,35 +86,32 @@ class CM_Core(CM_API_Client, CM_GUI):
     # Refresh User List Function
     def refresh_user_list(self, active_users:dict) -> None:
         """Refresh the connected users list and update allocated forces based on status."""
-        try:
-            # Remove any dupes and sort alphabetically
-            no_dupes = [dict(t) for t in {tuple(user.items()) for user in active_users}]
-            self.connected_users = sorted(no_dupes, key=lambda user: user["player"])
-            #self.log.debug(f"refresh_user_list(): initial connected users: {self.connected_users}")
-            # Update Connected Users Listbox
-            self.connected_users_delete()
-            for user in self.connected_users:
-                self.connected_users_insert(user["player"])
-                #self.log.debug(f"refresh_user_list(): inserting into connected users: {user}")
-            # Update Allocated Forces Listbox
-            self.update_allocated_forces()
-        except Exception as e:
-            self.log.error(f"refresh_user_list(): Error: {e.__class__.__name__} - {e}")
+        # Remove any dupes and sort alphabetically
+        no_dupes = [dict(t) for t in {tuple(user.items()) for user in active_users}]
+        self.connected_users = sorted(no_dupes, key=lambda user: user["player"])
+        #self.log.debug(f"refresh_user_list(): initial connected users: {self.connected_users}")
+        # Update Connected Users Listbox
+        self.connected_users_delete()
+        for user in self.connected_users:
+            self.connected_users_insert(user["player"])
+            #self.log.debug(f"refresh_user_list(): inserting into connected users: {user}")
+        # Update Allocated Forces Listbox
+        self.update_allocated_forces()
 
     def check_for_cm_updates(self) -> None:
         """
         Checks the update_queue for new commander data and refreshes the user list.
         This method should be called periodically from the Tkinter main loop.
         """
-        try:
-            while self.heartbeat_status["active"]:
+        while self.heartbeat_status["active"]:
+            try:
                 if not self.update_queue.empty():
                     active_commanders = self.update_queue.get()
                     #self.log.debug(f"check_for_cm_updates(): Received active commanders payload: {active_commanders}")
                     self.refresh_user_list(active_commanders)
                 sleep(1)
-        except Exception as e:
-            self.log.error(f"check_for_cm_updates(): Error: {e.__class__.__name__} - {e}")
+            except Exception as e:
+                self.log.error(f"check_for_cm_updates(): Error: {e.__class__.__name__} - {e}")
 
     def start_heartbeat_threads(self) -> None:
         """Start the heartbeat threads."""
@@ -137,13 +136,15 @@ class CM_Core(CM_API_Client, CM_GUI):
                 isinstance(self.cm_update_daemon, Thread) and self.cm_update_daemon.is_alive()
             ):
                 self.log.info("Commander is shutting down...")
+                self.heartbeat_status["active"] = False
+                self.clear_listboxes()
                 self.heartbeat_daemon = None
                 self.log.debug(f"stop_heartbeat_threads(): Stopped heartbeat thread.")
                 self.cm_update_daemon = None
                 self.log.debug(f"stop_heartbeat_threads(): Stopped CM update thread.")
-                self.clear_listboxes()
+                
             else:
-                raise Exception("Commander Mode is not connected.")
+                self.log.debug("stop_heartbeat_threads(): Commander Mode is not connected.")
         except Exception as e:
             self.log.error(f"Error: {e}")
 
@@ -152,6 +153,7 @@ class CM_Core(CM_API_Client, CM_GUI):
         self.log.debug(f"clear_listboxes(): Data before clearing - connected_users: {self.connected_users}, alloc_users: {self.alloc_users}")
         self.connected_users.clear()
         self.alloc_users.clear()
-        self.connected_users_delete()
-        self.allocated_forces_delete()
+        if self.commander_window:
+            self.connected_users_delete()
+            self.allocated_forces_delete()
         self.log.debug(f"clear_listboxes(): Data after clearing - connected_users: {self.connected_users}, alloc_users: {self.alloc_users}")

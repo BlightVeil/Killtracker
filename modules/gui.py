@@ -64,6 +64,7 @@ class GUI():
         self.cm = None
         self.key_entry = None
         self.api_status_label = None
+        self.commander_mode_button = None
 
     def setup_app_log_display(self):
         """Setup app logging in a text display area."""
@@ -165,10 +166,10 @@ class GUI():
         options_frame.pack(pady=(10, 10))
 
         # Commander Mode Button
-        commander_mode_button = self.create_button(
+        self.commander_mode_button = self.create_button(
             options_frame, text="Commander Mode", font=("Times New Roman", 12), command=self.cm.setup_commander_mode, bg="#000000", fg="#ffffff"
         )
-        commander_mode_button.pack(side=tk.LEFT, pady=(10, 10))
+        self.commander_mode_button.pack(side=tk.LEFT, pady=(10, 10))
 
         # App log text area
         self.log = AppLogger(self.setup_app_log_display())
@@ -191,7 +192,6 @@ class GUI():
             self.app = tk.Tk(useTk=True)
             self.app.title(f"BlightVeil Kill Tracker v{self.local_version}")
             self.app.minsize(width=800, height=800)
-            self.app.maxsize(width=800, height=800)
             self.app.configure(bg="#484759")
         except Exception as e:
             print(f"setup_gui(): ERROR: Init setup failed: {e.__class__.__name__} {e}")

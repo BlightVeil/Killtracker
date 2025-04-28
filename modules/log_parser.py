@@ -37,7 +37,6 @@ class LogParser():
         """Start the log tailing in a separate thread only if it's not already running."""
         thr = Thread(target=self.tail_log, daemon=True)
         thr.start()
-        self.log.debug(f"start_tail_log_thread(): tail_log thread started.")
 
     def tail_log(self) -> None:
         """Read the log file and display events in the GUI."""
@@ -48,9 +47,9 @@ class LogParser():
                 return
         except Exception as e:
             self.log.error(f"Error opening log file: {e.__class__.__name__} {e}")
-
         try:
             self.log.warning("Enter Kill Tracker Key to establish Servitor connection...")
+            sleep(1)
             while self.monitoring["active"]:
                 # Block loop until API key is valid
                 if self.api.api_key["value"]:

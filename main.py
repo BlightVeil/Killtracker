@@ -160,7 +160,7 @@ def main():
 
     try:
         cm_module = CM_Core(
-            api_client_module, kt.monitoring, kt.heartbeat_status, kt.rsi_handle, kt.active_ship, kt.update_queue
+            gui_module, api_client_module, kt.monitoring, kt.heartbeat_status, kt.rsi_handle, kt.active_ship, kt.update_queue
         )
     except Exception as e:
         print(f"main(): ERROR in setting up the API Client module: {e.__class__.__name__} {e}")

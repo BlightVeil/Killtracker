@@ -20,7 +20,7 @@ class API_Client():
         self.api_fqdn = "http://drawmyoshi.com:25966"
         self.expiration_time = None
         self.countdown_active = False
-        self.countdown_interval = 30
+        self.countdown_interval = 60
         self.key_status_valid_color = "#04B431"
         self.key_status_invalid_color = "red"
 
