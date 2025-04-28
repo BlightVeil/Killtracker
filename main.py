@@ -18,7 +18,7 @@ from modules.commander_mode.cm_core import CM_Core
 class KillTracker():
     """Official Kill Tracker for BlightVeil."""
     def __init__(self):
-        self.local_version = "1.4"
+        self.local_version = "1.5"
         self.log = None
         self.log_parser = None
         #self.stop_event = Event()
