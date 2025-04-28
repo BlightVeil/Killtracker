@@ -114,11 +114,15 @@ class LogParser():
             self.log.debug(f"read_log_line(): set_ac_ship with: {line}.")
         elif ((-1 != line.find("<Vehicle Destruction>")) or (
                 -1 != line.find("<local client>: Entering control state dead"))) and (
-                -1 != line.find(self.active_ship_id)) and self.cm.heartbeat_status["active"]:
-                self.destroy_player_zone()
-                self.log.debug(f"read_log_line(): destroy_player_zone with: {line}.")
+                -1 != line.find(self.active_ship_id):
+                # Send ship destroy event to the server via heartbeat
+                if self.cm.heartbeat_status["active"]:
+                    self.destroy_player_zone()
+                    self.log.debug(f"read_log_line(): destroy_player_zone with: {line}.")
         elif -1 != line.find(self.rsi_handle["current"]):
-            if -1 != line.find("OnEntityEnterZone") and self.cm.heartbeat_status["active"]:
+            if -1 != line.find("OnEntityEnterZone"):
+                # Send change ship event to the server via heartbeat
+                if self.cm.heartbeat_status["active"]:
                     self.set_player_zone(line)
                     self.log.debug(f"read_log_line(): set_player_zone with: {line}.")
             if -1 != line.find("CActor::Kill") and not self.check_substring_list(line, self.ignore_kill_substrings) and upload_kills:
