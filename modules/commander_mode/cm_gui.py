@@ -37,89 +37,97 @@ class CM_GUI():
         widget.bind("<FocusIn>", remove_placeholder)
         widget.bind("<FocusOut>", add_placeholder)
 
-    def open_commander_mode(self) -> None:
+    def toggle_commander(self):
+        """Handle connect commander button."""
+        if self.heartbeat_status["active"]:
+            self.heartbeat_status["active"] = False
+            self.stop_heartbeat_threads()
+            self.connect_commander_button.config(text="Connect to Commander", fg="#ffffff", bg="#000000")
+            self.log.error(f"You are disconnected from Commander.")
+        else:
+            self.heartbeat_status["active"] = True
+            self.start_heartbeat_threads()
+            self.connect_commander_button.config(text="Disconnect Commander", fg="#000000", bg="#04B431")
+            self.log.success(f"You are connected to Commander.")
+
+    def setup_commander_mode(self) -> None:
         """
         Opens a new window for Commander Mode, displaying connected users and allocated forces.
         Includes functionality for moving users to the allocated forces list and handling status changes.
         """
-        commander_window = tk.Toplevel()
-        commander_window.title("Commander Mode")
-        commander_window.minsize(width=1280, height=720)
-        commander_window.configure(bg="#484759")
-        # Stop heartbeat if Commander Mode window is closed
-        #commander_window.protocol("WM_DELETE_WINDOW", self.destroy_window(commander_window)) #FIXME
+        try:
+            commander_window = tk.Toplevel()
+            commander_window.title("Commander Mode")
+            commander_window.minsize(width=1280, height=720)
+            commander_window.configure(bg="#484759")
+            # Stop heartbeat if Commander Mode window is closed
+            #commander_window.protocol("WM_DELETE_WINDOW", self.destroy_window(commander_window)) #FIXME
 
-        # Search bar for filtering connected users
-        search_var = tk.StringVar()
-        search_bar = tk.Entry(commander_window, textvariable=search_var, font=("Consolas", 12), width=30)
-        self.config_search_bar(search_bar, "Search Connected Users...")
-        search_bar.pack(pady=(10, 0))
+            # Search bar for filtering connected users
+            search_var = tk.StringVar()
+            search_bar = tk.Entry(commander_window, textvariable=search_var, font=("Consolas", 12), width=30)
+            self.config_search_bar(search_bar, "Search Connected Users...")
+            search_bar.pack(pady=(10, 0))
 
-        # Connected Users Listbox
-        connected_users_frame = tk.Frame(
-            commander_window, bg="#484759"
-        )
-        connected_users_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 5), pady=(5, 10))
+            # Connected Users Listbox
+            connected_users_frame = tk.Frame(
+                commander_window, bg="#484759"
+            )
+            connected_users_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 5), pady=(5, 10))
 
-        connected_users_label = tk.Label(
-            connected_users_frame, text="Connected Users", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
-        )
-        connected_users_label.pack()
+            connected_users_label = tk.Label(
+                connected_users_frame, text="Connected Users", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+            )
+            connected_users_label.pack()
 
-        self.connected_users_listbox = tk.Listbox(
-            connected_users_frame, selectmode=tk.MULTIPLE, width=40, height=20, font=("Consolas", 12), bg="#282a36", fg="#f8f8f2"
-        )
-        self.connected_users_listbox.pack(fill=tk.BOTH, expand=True)
+            self.connected_users_listbox = tk.Listbox(
+                connected_users_frame, selectmode=tk.MULTIPLE, width=40, height=20, font=("Consolas", 12), bg="#282a36", fg="#f8f8f2"
+            )
+            self.connected_users_listbox.pack(fill=tk.BOTH, expand=True)
 
-        # Allocated Forces Listbox
-        allocated_forces_frame = tk.Frame(
-            commander_window, bg="#484759"
-        )
-        allocated_forces_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 10), pady=(5, 10))
+            # Allocated Forces Listbox
+            allocated_forces_frame = tk.Frame(
+                commander_window, bg="#484759"
+            )
+            allocated_forces_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 10), pady=(5, 10))
 
-        allocated_forces_label = tk.Label(
-            allocated_forces_frame, text="Allocated Forces", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
-        )
-        allocated_forces_label.pack()
+            allocated_forces_label = tk.Label(
+                allocated_forces_frame, text="Allocated Forces", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+            )
+            allocated_forces_label.pack()
 
-        self.allocated_forces_listbox = tk.Listbox(
-            allocated_forces_frame, width=40, height=20, font=("Consolas", 12), bg="#282a36", fg="#ff0000"
-        )
-        self.allocated_forces_listbox.pack(fill=tk.BOTH, expand=True)
+            self.allocated_forces_listbox = tk.Listbox(
+                allocated_forces_frame, width=40, height=20, font=("Consolas", 12), bg="#282a36", fg="#ff0000"
+            )
+            self.allocated_forces_listbox.pack(fill=tk.BOTH, expand=True)
 
-        # Add User To Fleet Button
-        add_user_to_fleet_button = tk.Button(
-            commander_window, text="Add User to Fleet", font=("Times New Roman", 12), command=self.allocate_selected_users, bg="#000000", fg="#ffffff"
-        )
-        add_user_to_fleet_button.pack(pady=(30, 10))
+            self.connect_commander_button = tk.Button(
+                commander_window, text="Connect to Commander", font=("Times New Roman", 12), command=self.toggle_commander, bg="#000000", fg="#ffffff"
+            )
+            self.connect_commander_button.pack(pady=(60, 10))
 
-        # Add All To Fleet Button
-        add_all_to_fleet_button = tk.Button(
-            commander_window, text="Add All Users to Fleet", font=("Times New Roman", 12), command=self.allocate_all_users, bg="#000000", fg="#ffffff"
-        )
-        add_all_to_fleet_button.pack(pady=(10, 10))
-        
-        start_heartbeat_button = tk.Button(
-            commander_window, text="Connect to Commander", font=("Times New Roman", 12), command=self.start_heartbeat_threads, bg="#000000", fg="#ffffff"
-        )
-        start_heartbeat_button.pack(pady=(10, 10))
+            add_user_to_fleet_button = tk.Button(
+                commander_window, text="Add User to Fleet", font=("Times New Roman", 12), command=self.allocate_selected_users, bg="#000000", fg="#ffffff"
+            )
+            add_user_to_fleet_button.pack(pady=(30, 10))
 
-        # Close Button
-        dc_button = tk.Button(
-            commander_window, text="Disconnect", font=("Times New Roman", 12), command=self.stop_heartbeat_threads, bg="#000000", fg="#ffffff"
-        )
-        dc_button.pack(pady=(10, 10))
+            add_all_to_fleet_button = tk.Button(
+                commander_window, text="Add All Users to Fleet", font=("Times New Roman", 12), command=self.allocate_all_users, bg="#000000", fg="#ffffff"
+            )
+            add_all_to_fleet_button.pack(pady=(10, 10))
+            
+            # Search Functionality
+            def search_users(*args):
+                search_query = search_var.get().lower()
+                self.connected_users_listbox.delete(0, tk.END)
+                if self.connected_users:
+                    for user in self.connected_users:
+                        if search_query in user['player'].lower():
+                            self.connected_users_listbox.insert(tk.END, user['player'])
 
-        # Search Functionality
-        def search_users(*args):
-            search_query = search_var.get().lower()
-            self.connected_users_listbox.delete(0, tk.END)
-            if self.connected_users:
-                for user in self.connected_users:
-                    if search_query in user['player'].lower():
-                        self.connected_users_listbox.insert(tk.END, user['player'])
-
-        search_var.trace("w", search_users)
+            search_var.trace("w", search_users)
+        except Exception as e:
+            self.log.error(f"setup_commander_mode(): Error: {e.__class__.__name__} {e}")
     
     def destroy_window(self, commander_window) -> None:
         """Stop heartbeat if window is closed"""

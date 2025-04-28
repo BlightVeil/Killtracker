@@ -3,12 +3,15 @@ import webbrowser
 from threading import Thread
 from datetime import datetime
 from packaging import version
+from time import sleep
 
 class API_Client():
     """API client for the Kill Tracker."""
-    def __init__(self, gui, local_version, rsi_handle):
+    def __init__(self, gui, monitoring, local_version, rsi_handle):
         self.log = None
+        self.cm = None
         self.gui = gui
+        self.monitoring = monitoring
         self.local_version = local_version
         self.rsi_handle = rsi_handle
         self.request_timeout = 12
@@ -16,6 +19,10 @@ class API_Client():
         self.api_key_filename = "killtracker_key.cfg"
         self.api_fqdn = "http://drawmyoshi.com:25966"
         self.expiration_time = None
+        self.countdown_active = False
+        self.countdown_interval = 30
+        self.key_status_valid_color = "#04B431"
+        self.key_status_invalid_color = "red"
 
 
 #########################################################################################################
@@ -43,10 +50,10 @@ class API_Client():
                     return f"Update available: {remote_version}. Download it here: {download_url}"
                 return ""
             else:
-                self.log.error(f"GitHub API error: {response.status_code}")
+                print(f"GitHub API error: {response.status_code}")
                 return ""
         except Exception as e:
-            self.log.error(f"check_for_kt_updates(): Error checking for updates: {e.__class__.__name__} {e}")
+            print(f"check_for_kt_updates(): Error checking for updates: {e.__class__.__name__} {e}")
             return ""
         
     def open_github(self, update_message:str) -> None:
@@ -55,7 +62,7 @@ class API_Client():
             url = update_message.split("Download it here: ")[-1]
             webbrowser.open(url)
         except Exception as e:
-            self.log.error(f"Error opening GitHub link: {e.__class__.__name__} {e}")
+            print(f"Error opening GitHub link: {e.__class__.__name__} {e}")
 
 
 #########################################################################################################
@@ -75,14 +82,16 @@ class API_Client():
                 "api_key": key,
                 "player_name": self.rsi_handle["current"]
             }
+            self.log.debug(f"validate_api_key(): Request payload: {api_key_data}")
             response = requests.post(
                 url, 
                 headers=headers, 
                 json=api_key_data, 
                 timeout=self.request_timeout
             )
+            self.log.debug(f"validate_api_key(): Response text: {response.text}")
             if response.status_code != 200:
-                self.log.error(f"Error in validating the API key: code {response.status_code}")
+                self.log.error(f"Error in validating the key: code {response.status_code}")
                 return False
             return True
         except requests.RequestException as e:
@@ -97,7 +106,7 @@ class API_Client():
             self.log.success(f"Saved key loaded: {entered_key}. Attempting to establish Servitor connection...")
         else:
             self.log.error("No saved key found in file. Please get a new key from the key generator.")
-            self.gui.api_status_label.config(text="API Status: Invalid", fg="red")
+            self.gui.api_status_label.config(text="Key Status: Invalid", fg=self.key_status_invalid_color)
         return entered_key
     
     def save_api_key(self, key:str) -> None:
@@ -111,13 +120,13 @@ class API_Client():
         try:
             entered_key = self.gui.key_entry.get().strip()  # Access key_entry in GUI here
         except Exception as e:
-            self.log.error(f"load_activate_key(): Error parsing API key: {e.__class__.__name__} {e}")
+            self.log.error(f"load_activate_key(): Error parsing key: {e.__class__.__name__} {e}")
         try:
             if not entered_key:
                 entered_key = self.load_api_key()
         except FileNotFoundError:
             self.log.error("No saved key found. Please enter a valid key.")
-            self.gui.api_status_label.config(text="API Status: Invalid", fg="red")  # Access api_status_label in GUI here
+            self.gui.api_status_label.config(text="Key Status: Invalid", fg=self.key_status_invalid_color)  # Access api_status_label in GUI here
             return
         try:
             # Proceed with activation
@@ -125,23 +134,26 @@ class API_Client():
                 if self.validate_api_key(entered_key):
                     self.save_api_key(entered_key)  # Save the key for future use
                     self.log.success("Key activated and saved. Servitor connection established.")
-                    self.gui.api_status_label.config(text="API Status: Valid (Expires in 72 hours)", fg="green")
-                    self.start_api_key_countdown()
+                    self.gui.api_status_label.config(text="Key Status: Valid", fg=self.key_status_valid_color)
+                    if not self.countdown_active:
+                        self.countdown_active = True
+                        thr = Thread(target=self.start_api_key_countdown, daemon=True)
+                        thr.start()
                 else:
-                    self.log.error("Error: Invalid API key. Please enter a valid API key.")
+                    self.log.error("Error: Invalid key. Please enter a valid key from Discord.")
                     self.api_key["value"] = None
-                    self.gui.api_status_label.config(text="API Status: Invalid", fg="red")
+                    self.gui.api_status_label.config(text="Key Status: Invalid", fg=self.key_status_invalid_color)
             else:
                 self.log.error("Error: Invalid RSI handle name.")
-                self.gui.api_status_label.config(text="API Status: Invalid", fg="red")
+                self.gui.api_status_label.config(text="Key Status: Invalid", fg=self.key_status_invalid_color)
         except Exception as e:
-            self.log.error(f"Error activating API key: {e.__class__.__name__} {e}")
+            self.log.error(f"Error activating key: {e.__class__.__name__} {e}")
 
     def post_api_key_expiration_time(self):
         """Retrieve the expiration time for the API key from the validation server."""
         try:
             if not self.api_key["value"]:
-                self.log.error("Error: death event will not be sent because the API key does not exist.")
+                self.log.error("Error: death event will not be sent because the Kill Tracker key does not exist.")
                 return
             
             url = f"{self.api_fqdn}/validateKey"
@@ -152,64 +164,63 @@ class API_Client():
             api_key_exp_time = {
                 "player_name": self.rsi_handle["current"]
             }
+            self.log.debug(f"post_api_key_expiration_time(): Request payload: {api_key_exp_time}")
             response = requests.post(
                 url, 
                 headers=headers, 
                 json=api_key_exp_time, 
                 timeout=self.request_timeout
             )
+            self.log.debug(f"post_api_key_expiration_time(): Response text: {response.text}")
             if response.status_code == 200:
                 response_data = response.json()
                 expiration_time_str = response_data.get("expires_at")
                 if expiration_time_str:
                     return datetime.strptime(expiration_time_str, "%Y-%m-%dT%H:%M:%S.%fZ")
                 else:
-                    raise Exception("API key expiration time not sent in Servitor response.")
+                    raise Exception("Key expiration time not sent in Servitor response.")
             else:
-                self.log.error(f"Error in posting API key expiration time: code {response.status_code}")
+                self.log.error(f"Error in posting key expiration time: code {response.status_code}")
         except requests.exceptions.RequestException as e:
             #self.gui.async_loading_animation()
-            self.log.error(f"HTTP Error sending API key expiration time event: {e}")
-            self.log.error(f"Error: API key expiration time will not be sent!")
+            self.log.error(f"HTTP Error sending key expiration time event: {e}")
+            self.log.error(f"Error: key expiration time will not be sent!")
         except Exception as e:
             self.log.error(f"post_api_key_expiration_time(): Error: {e.__class__.__name__} {e}")
         # Fallback: Expire immediately if there's an error
         return None
 
-    # FIXME THIS WHOLE FUNCTION NEEDS A REFACTOR, IT'S GIVING ME AN ANEURYSM - Samurai
     def start_api_key_countdown(self) -> None:
         """Start the countdown for the API key's expiration, refreshing expiry data periodically."""
-        def countdown(expiration_time):
-            """Calculate the remaining time."""
-            remaining_time = expiration_time - datetime.utcnow()
-            if remaining_time.total_seconds() > 0:
-                hours, remainder = divmod(remaining_time.seconds, 3600)
-                minutes, seconds = divmod(remainder, 60)
-                countdown_text = f"API Status: Valid (Expires in {remaining_time.days}d {hours}h {minutes}m {seconds}s)"
-                self.gui.api_status_label.config(text=countdown_text, fg="green")
-                self.gui.api_status_label.after(1000, countdown(expiration_time))  # Update every second
-            else:
-                self.gui.api_status_label.config(text="API Status: Expired", fg="red")
-
-        def fetch_expiration_time():
-            """Fetch expiration time in a separate thread and update countdown."""
-            thr = Thread(target=threaded_request, daemon=True)
-            thr.start()
-
-        def threaded_request():
-            """Get the expiration time."""
-            expiration_time = self.post_api_key_expiration_time()  # Fetch latest expiration time
-            #self.log.debug(f"Current expiration time of API key: {expiration_time}")
-            if not expiration_time:
-                self.gui.api_status_label.config(text="API Status: Expired", fg="red")
-                return
-
-            countdown(expiration_time)
-
-            # Refresh expiration time every 60 seconds in a new thread
-            self.gui.api_status_label.after(60000, fetch_expiration_time)
-
-        fetch_expiration_time()  # Initial call
+        def stop_countdown():
+            if self.cm:
+                self.cm.stop_heartbeat_threads()
+            self.api_key["value"] = None
+            self.monitoring["active"] = False
+            self.gui.api_status_label.config(text="Key Status: Expired", fg=self.key_status_invalid_color)
+            self.countdown_active = False
+        
+        while self.countdown_active:
+            try:
+                # Get the expiration time from the server
+                expiration_time = self.post_api_key_expiration_time()
+                if expiration_time:
+                    # Calculate the remaining time
+                    remaining_time = expiration_time - datetime.utcnow()
+                    if remaining_time.total_seconds() > 0:
+                        hours, remainder = divmod(remaining_time.seconds, 3600)
+                        minutes, seconds = divmod(remainder, 60)
+                        countdown_text = f"Key Status: Valid (Expires in {remaining_time.days}d {hours}h {minutes}m {seconds}s)"
+                        self.gui.api_status_label.config(text=countdown_text, fg=self.key_status_valid_color)
+                    else:
+                        self.log.error(f"Key expired. Please enter a new Kill Tracker key.")
+                        stop_countdown()
+                else:
+                    self.log.error(f"Error received from server. Please enter a new Kill Tracker key.")
+                    stop_countdown()
+            except Exception as e:
+                self.log.error(f"start_api_key_countdown(): Error in count down: {e.__class__.__name__} {e}")
+            sleep(self.countdown_interval)
 
 
 #########################################################################################################
@@ -221,7 +232,7 @@ class API_Client():
         """Post the kill parsed from the log."""
         try:
             if not self.api_key["value"]:
-                self.log.error("Error: kill event will not be sent because the API key does not exist. Please enter a valid API key to establish connection with Servitor...")
+                self.log.error("Error: kill event will not be sent because the key does not exist. Please enter a valid Kill Tracker key to establish connection with Servitor...")
                 return
             
             url = f"{self.api_fqdn}/reportKill"
@@ -229,12 +240,14 @@ class API_Client():
                 'content-type': 'application/json',
                 'Authorization': self.api_key["value"] if self.api_key["value"] else ""
             }
+            self.log.debug(f"post_kill_event(): Request payload: {kill_result['data']}")
             response = requests.post(
                 url, 
                 headers=headers, 
                 json=kill_result["data"], 
                 timeout=self.request_timeout
             )
+            self.log.debug(f"post_kill_event(): Response text: {response.text}")
             if response.status_code != 200:
                 self.log.error(f"Error when posting kill: code {response.status_code}")
                 self.log.error(f"Error: kill event {kill_result} will not be sent!")

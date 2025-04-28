@@ -3,7 +3,7 @@ from sys import exit
 from time import sleep
 from os import path
 from psutil import process_iter
-from threading import Thread, Event
+from threading import Thread
 from queue import Queue
 import warnings
 warnings.filterwarnings("ignore", message="Couldn't find ffmpeg or avconv")
@@ -108,7 +108,7 @@ class KillTracker():
 
                 if game_running and not self.monitoring["active"]:  # Log only when transitioning to running
                     self.log_parser.log_file_location = self.get_sc_log_location(self.get_sc_processes())
-                    self.log.success("Star Citizen is running. Starting log monitoring.")
+                    self.log.success("Star Citizen is running. Starting kill tracking.")
                     self.rsi_handle["current"] = self.log_parser.find_rsi_handle()
                     self.log.success(f"Current user is {self.rsi_handle['current']}.")
                     self.monitoring["active"] = True
@@ -127,7 +127,7 @@ class KillTracker():
             sleep(delay_in_seconds) 
             self.log.warning("Application has been open for 72 hours. Shutting down in 60 seconds.")
             sleep(60)
-            app.quit() 
+            app.quit()
             exit(0) 
 
         # Run the shutdown logic in a separate thread
@@ -148,9 +148,8 @@ def main():
 
     try:
         api_client_module = API_Client(
-            gui_module, kt.local_version, kt.rsi_handle
+            gui_module, kt.monitoring, kt.local_version, kt.rsi_handle
         )
-        gui_module.api = api_client_module
     except Exception as e:
         print(f"main(): ERROR in setting up the API Client module: {e.__class__.__name__} {e}")
 
@@ -161,7 +160,7 @@ def main():
 
     try:
         cm_module = CM_Core(
-            kt.monitoring, api_client_module, kt.heartbeat_status, kt.rsi_handle, kt.active_ship, kt.update_queue
+            api_client_module, kt.monitoring, kt.heartbeat_status, kt.rsi_handle, kt.active_ship, kt.update_queue
         )
     except Exception as e:
         print(f"main(): ERROR in setting up the API Client module: {e.__class__.__name__} {e}")
@@ -170,7 +169,6 @@ def main():
         log_parser_module = LogParser(
             gui_module, api_client_module, sound_module, cm_module, kt.monitoring, kt.rsi_handle, kt.active_ship, kt.anonymize_state
         )
-        kt.log_parser = log_parser_module
     except Exception as e:
         print(f"main(): ERROR in setting up the Log Parser module: {e.__class__.__name__} {e}")
 
@@ -180,9 +178,12 @@ def main():
         print(f"main(): ERROR in checking if the game is running: {e.__class__.__name__} {e}")
 
     try:
-        # Instantiate the GUI
+        # API needs ref to some class instances for functions
+        api_client_module.cm = cm_module
+        # GUI needs ref to some class instances to setup the GUI
         gui_module.api = api_client_module
         gui_module.cm = cm_module
+        # Instantiate the GUI
         gui_module.setup_gui(game_running)
     except Exception as e:
         print(f"main(): ERROR in setting up the GUI: {e.__class__.__name__} {e}")
@@ -190,22 +191,24 @@ def main():
     if game_running:
         try:
             #TODO Make a module import framework to easily add in future modules
-
-            # Used to pass logger ref to other modules
-            log = gui_module.log
-            # Add logger ref to main class
-            kt.log = log
-            api_client_module.log = log
-            sound_module.log = log
-            cm_module.log = log
-            log_parser_module.log = log
+            kt.log_parser = log_parser_module
+            # Add logger ref to classes
+            kt.log = gui_module.log
+            api_client_module.log = gui_module.log
+            sound_module.log = gui_module.log
+            cm_module.log = gui_module.log
+            log_parser_module.log = gui_module.log
         except Exception as e:
             print(f"main(): ERROR in setting up the app loggers: {e.__class__.__name__} {e}")
 
         try:
             sound_module.setup_sounds()
+        except Exception as e:
+            print(f"main(): ERROR in setting up the sounds module: {e.__class__.__name__} {e}")
+
+        try:
             # Kill Tracker monitor loop
-            Thread(target=kt.monitor_game_state, daemon=True).start()
+            monitor_thr = Thread(target=kt.monitor_game_state, daemon=True).start()
             kt.auto_shutdown(gui_module.app, 72 * 60 * 60)
         except Exception as e:
             print(f"main(): ERROR starting game state monitoring: {e.__class__.__name__} {e}")
@@ -213,14 +216,17 @@ def main():
     try:
         # GUI main loop
         gui_module.app.mainloop()
+    except KeyboardInterrupt:
+        print("Program interrupted. Exiting gracefully...")
+        kt.monitoring["active"] = False
+        if isinstance(monitor_thr, Thread):
+            monitor_thr.join(1)
+        gui_module.app.quit()
     except Exception as e:
         print(f"main(): ERROR starting GUI main loop: {e.__class__.__name__} {e}")
 
 if __name__ == '__main__':
     try:
         main()
-    except KeyboardInterrupt:
-        print("Program interrupted. Exiting gracefully...")
-        # Optionally add any cleanup or logging here before exiting.
     except Exception as e:
         print(f"__main__: ERROR: {e.__class__.__name__} {e}")

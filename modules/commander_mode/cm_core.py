@@ -6,12 +6,12 @@ from modules.commander_mode.cm_gui import CM_GUI
 
 class CM_Core(CM_API_Client, CM_GUI):
     """Commander Mode core module for the Kill Tracker."""
-    def __init__(self, monitoring, api_module, heartbeat_status, rsi_handle, active_ship, update_queue):
+    def __init__(self, api_module, monitoring, heartbeat_status, rsi_handle, active_ship, update_queue):
         self.log = None
-        self.monitoring = monitoring
         self.api_key = api_module.api_key
         self.api_fqdn = api_module.api_fqdn
         self.request_timeout = api_module.request_timeout
+        self.monitoring = monitoring
         self.heartbeat_status = heartbeat_status
         self.rsi_handle = rsi_handle
         self.active_ship = active_ship
@@ -20,6 +20,7 @@ class CM_Core(CM_API_Client, CM_GUI):
         self.connected_users_listbox = None
         self.alloc_users = []
         self.allocated_forces_listbox = None
+        self.connect_commander_button = None
         self.join_timeout = 10
         self.heartbeat_interval = 5
         self.heartbeat_daemon = None
@@ -29,6 +30,7 @@ class CM_Core(CM_API_Client, CM_GUI):
         """Allocate selected Connected Users to Allocated Forces."""
         try:
             curr_alloc_users = [user["player"] for user in self.alloc_users]
+            self.log.debug(f"allocate_selected_users(): curr_alloc_users: {curr_alloc_users}")
             selected_indices = self.connected_users_listbox.curselection()
             for index in selected_indices:
                 player_name = self.connected_users_listbox.get(index)
@@ -37,6 +39,7 @@ class CM_Core(CM_API_Client, CM_GUI):
                 if user_info and user_info["player"] not in curr_alloc_users:
                     # Add to allocated forces
                     self.alloc_users.append(user_info)
+                    self.log.debug(f"allocate_selected_users(): Inserting into allocated forces: {user_info}")
                     self.allocated_forces_insert(f"{user_info['player']} - Zone: {user_info['zone']}")
         except Exception as e:
             self.log.error(f"allocate_selected_users(): Error: {e.__class__.__name__} - {e}")
@@ -45,10 +48,12 @@ class CM_Core(CM_API_Client, CM_GUI):
         """Allocate all Connected Users to Allocated Forces if not already in."""
         try:
             curr_alloc_users = [user["player"] for user in self.alloc_users]
+            self.log.debug(f"allocate_all_users(): curr_alloc_users: {curr_alloc_users}")
             for conn_user in self.connected_users:
                 if conn_user["player"] not in curr_alloc_users:
                     # Add to allocated forces
                     self.alloc_users.append(conn_user)
+                    self.log.debug(f"allocate_all_users(): Inserting into allocated forces: {conn_user}")
                     self.allocated_forces_insert(f"{conn_user['player']} - Zone: {conn_user['zone']}")
         except Exception as e:
             self.log.error(f"allocate_all_users(): Error: {e.__class__.__name__} - {e}")
@@ -83,10 +88,12 @@ class CM_Core(CM_API_Client, CM_GUI):
             # Remove any dupes and sort alphabetically
             no_dupes = [dict(t) for t in {tuple(user.items()) for user in active_users}]
             self.connected_users = sorted(no_dupes, key=lambda user: user["player"])
+            #self.log.debug(f"refresh_user_list(): initial connected users: {self.connected_users}")
             # Update Connected Users Listbox
             self.connected_users_delete()
             for user in self.connected_users:
                 self.connected_users_insert(user["player"])
+                #self.log.debug(f"refresh_user_list(): inserting into connected users: {user}")
             # Update Allocated Forces Listbox
             self.update_allocated_forces()
         except Exception as e:
@@ -101,6 +108,7 @@ class CM_Core(CM_API_Client, CM_GUI):
             while self.heartbeat_status["active"]:
                 if not self.update_queue.empty():
                     active_commanders = self.update_queue.get()
+                    #self.log.debug(f"check_for_cm_updates(): Received active commanders payload: {active_commanders}")
                     self.refresh_user_list(active_commanders)
                 sleep(1)
         except Exception as e:
@@ -113,8 +121,10 @@ class CM_Core(CM_API_Client, CM_GUI):
                 self.log.info("Connecting to Commander...")
                 self.heartbeat_daemon = Thread(target=self.post_heartbeat, daemon=True)
                 self.heartbeat_daemon.start()
+                self.log.debug(f"start_heartbeat_threads(): Started heartbeat thread.")
                 self.cm_update_daemon = Thread(target=self.check_for_cm_updates, daemon=True)
                 self.cm_update_daemon.start()
+                self.log.debug(f"start_heartbeat_threads(): Started CM update thread.")
             else:
                 raise Exception("Already connected to commander!")
         except Exception as e:
@@ -127,11 +137,10 @@ class CM_Core(CM_API_Client, CM_GUI):
                 isinstance(self.cm_update_daemon, Thread) and self.cm_update_daemon.is_alive()
             ):
                 self.log.info("Commander is shutting down...")
-                self.heartbeat_status["active"] = False
-                self.heartbeat_daemon.join(self.join_timeout)
                 self.heartbeat_daemon = None
-                self.cm_update_daemon.join(self.join_timeout)
+                self.log.debug(f"stop_heartbeat_threads(): Stopped heartbeat thread.")
                 self.cm_update_daemon = None
+                self.log.debug(f"stop_heartbeat_threads(): Stopped CM update thread.")
                 self.clear_listboxes()
             else:
                 raise Exception("Commander Mode is not connected.")
@@ -140,7 +149,9 @@ class CM_Core(CM_API_Client, CM_GUI):
 
     def clear_listboxes(self) -> None:
         """Cleanup listboxes when disconnected."""
+        self.log.debug(f"clear_listboxes(): Data before clearing - connected_users: {self.connected_users}, alloc_users: {self.alloc_users}")
         self.connected_users.clear()
         self.alloc_users.clear()
         self.connected_users_delete()
         self.allocated_forces_delete()
+        self.log.debug(f"clear_listboxes(): Data after clearing - connected_users: {self.connected_users}, alloc_users: {self.alloc_users}")

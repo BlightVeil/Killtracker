@@ -32,6 +32,8 @@ class Sounds():
         try:
             self.sounds_pyinst_dir = Path(Helpers.resource_path("sounds"))  # The PyInstaller temp executable directory
             self.sounds_live_dir = Path.cwd() / "sounds"  # The directory where the executable lives
+            self.log.debug(f"PyInstaller temp executable directory: {str(self.sounds_live_dir)}")
+            self.log.debug(f"The directory where the executable lives: {str(self.sounds_live_dir)}")
             # Ensure the folders exist
             self.sounds_pyinst_dir.mkdir(exist_ok=True)
             self.sounds_live_dir.mkdir(exist_ok=True)
@@ -55,6 +57,7 @@ class Sounds():
             self.log.debug(f"Copying sound files {source_files}")
             for sound_file in source_files:
                 target_path = target / sound_file
+                self.log.debug(f"Target path: {target_path}")
                 # Check if targets doesn't exist
                 if not target_path.exists():
                     shutil.copy(sound_file, target_path)

@@ -37,6 +37,7 @@ class LogParser():
         """Start the log tailing in a separate thread only if it's not already running."""
         thr = Thread(target=self.tail_log, daemon=True)
         thr.start()
+        self.log.debug(f"start_tail_log_thread(): tail_log thread started.")
 
     def tail_log(self) -> None:
         """Read the log file and display events in the GUI."""
@@ -49,12 +50,13 @@ class LogParser():
             self.log.error(f"Error opening log file: {e.__class__.__name__} {e}")
 
         try:
-            self.log.warning("Enter API key to establish Servitor connection...")
+            self.log.warning("Enter Kill Tracker Key to establish Servitor connection...")
             while self.monitoring["active"]:
                 # Block loop until API key is valid
                 if self.api.api_key["value"]:
                     break
                 sleep(1)
+            self.log.debug(f"tail_log(): Received key: {self.api.api_key}. Moving on...")
         except Exception as e:
             self.log.error(f"Error waiting for Servitor connection to be established: {e.__class__.__name__} {e}")
 
@@ -65,7 +67,7 @@ class LogParser():
             lines = sc_log.readlines()
             for line in lines:
                 if not self.api.api_key["value"]:
-                    self.log.error("Error: API key is invalid. Loading old log stopped.")
+                    self.log.error("Error: key is invalid. Loading old log stopped.")
                     break
                 self.read_log_line(line, False)
         except Exception as e:
@@ -74,6 +76,7 @@ class LogParser():
         try:
             # Main loop to monitor the log
             last_log_file_size = stat(self.log_file_location).st_size
+            self.log.debug(f"tail_log(): Last log size: {last_log_file_size}.")
             self.log.success("Kill Tracking initiated.")
             self.log.success("Go Forth And Slaughter...")
         except Exception as e:
@@ -82,7 +85,7 @@ class LogParser():
         while self.monitoring["active"]:
             try:
                 if not self.api.api_key["value"]:
-                    self.log.error("Error: API key is invalid. Kill Tracking is not active...")
+                    self.log.error("Error: key is invalid. Kill Tracking is not active...")
                     sleep(5)
                     continue
                 where = sc_log.tell()
@@ -104,20 +107,25 @@ class LogParser():
         """Event checking logic. Look for substrings, do stuff based on what we find."""
         if -1 != line.find("<Context Establisher Done>"):
             self.set_game_mode(line)
+            self.log.debug(f"read_log_line(): set_game_mode with: {line}.")
         elif -1 != line.find("CPlayerShipRespawnManager::OnVehicleSpawned") and (
                 "SC_Default" != self.game_mode) and (-1 != line.find(self.player_geid)):
             self.set_ac_ship(line)
+            self.log.debug(f"read_log_line(): set_ac_ship with: {line}.")
         elif ((-1 != line.find("<Vehicle Destruction>")) or (
                 -1 != line.find("<local client>: Entering control state dead"))) and (
                 -1 != line.find(self.active_ship_id)) and self.cm.heartbeat_status["active"]:
                 self.destroy_player_zone()
+                self.log.debug(f"read_log_line(): destroy_player_zone with: {line}.")
         elif -1 != line.find(self.rsi_handle["current"]):
             if -1 != line.find("OnEntityEnterZone") and self.cm.heartbeat_status["active"]:
                     self.set_player_zone(line)
+                    self.log.debug(f"read_log_line(): set_player_zone with: {line}.")
             if -1 != line.find("CActor::Kill") and not self.check_substring_list(line, self.ignore_kill_substrings) and upload_kills:
                 kill_result = self.parse_kill_line(line, self.rsi_handle["current"])
-                #self.log.debug(f"Kill Result: {kill_result}")
+                self.log.debug(f"read_log_line(): kill_result with: {line}.")
                 if kill_result["result"] == "exclusion":
+                    self.log.debug(f"read_log_line(): exclusion with: {line}.")
                     return
                 elif kill_result["result"] == "own_death":
                     # Log a message for the player's own death
@@ -255,12 +263,12 @@ class LogParser():
                 line_index = line.index("Handle[") + len("Handle[")
                 if 0 == line_index:
                     self.log.error("RSI Handle not found. Please ensure the game is running and the log file is accessible.")
-                    self.gui.api_status_label.config(text="API Status: Error", fg="yellow")
+                    self.gui.api_status_label.config(text="Key Status: Error", fg="yellow")
                     return ""
                 potential_handle = line[line_index:].split(' ')[0]
                 return potential_handle[0:-1]
         self.log.error("RSI Handle not found. Please ensure the game is running and the log file is accessible.")
-        self.gui.api_status_label.config(text="API Status: Error", fg="yellow")
+        self.gui.api_status_label.config(text="Key Status: Error", fg="yellow")
         return ""
 
     #FIXME unused?

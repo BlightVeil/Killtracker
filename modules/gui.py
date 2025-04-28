@@ -76,22 +76,22 @@ class GUI():
         """Handle anonymize button."""
         if self.anonymize_state["enabled"]:
             self.anonymize_state["enabled"] = False
-            self.anonymize_button.config(text=" Enable Anonymity ", bg='#000000')
+            self.anonymize_button.config(text=" Enable Anonymity ", fg="#ffffff", bg="#000000")
             self.log.error(f"You are not anonymous.")
         else:
             self.anonymize_state["enabled"] = True
-            self.anonymize_button.config(text="Anonymity Enabled", bg='#04B431')
+            self.anonymize_button.config(text="Anonymity Enabled", fg="#000000", bg="#04B431")
             self.log.success(f"You are anonymous.")
 
     def toggle_debug(self):
         """Handle debug button."""
         if global_settings.DEBUG_MODE["enabled"]:
             global_settings.DEBUG_MODE["enabled"] = False
-            self.debug_button.config(text=" Enable Debug Mode ", bg='#000000')
+            self.debug_button.config(text=" Enable Debug Mode ", fg="#ffffff", bg="#000000")
             self.log.error(f"Turned off Debug Mode.")
         else:
             global_settings.DEBUG_MODE["enabled"] = True
-            self.debug_button.config(text="Debug Mode Enabled", bg='#04B431')
+            self.debug_button.config(text="Debug Mode Enabled", fg="#000000", bg="#04B431")
             self.log.success(f"Turned on Debug Mode.")
 
     def async_loading_animation(self) -> None:
@@ -150,7 +150,7 @@ class GUI():
 
         # API Status Label
         self.api_status_label = self.create_label(
-            self.app, text="API Status: Not Validated", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+            self.app, text="Key Status: Not Validated", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
         )
         self.api_status_label.pack(pady=(10, 10))
         # Update the button to use the new combined function
@@ -166,7 +166,7 @@ class GUI():
 
         # Commander Mode Button
         commander_mode_button = self.create_button(
-            options_frame, text="Commander Mode", font=("Times New Roman", 12), command=self.cm.open_commander_mode, bg="#000000", fg="#ffffff"
+            options_frame, text="Commander Mode", font=("Times New Roman", 12), command=self.cm.setup_commander_mode, bg="#000000", fg="#ffffff"
         )
         commander_mode_button.pack(side=tk.LEFT, pady=(10, 10))
 
@@ -190,23 +190,22 @@ class GUI():
         try:
             self.app = tk.Tk(useTk=True)
             self.app.title(f"BlightVeil Kill Tracker v{self.local_version}")
-            #self.app.geometry("800x800")
             self.app.minsize(width=800, height=800)
             self.app.maxsize(width=800, height=800)
             self.app.configure(bg="#484759")
         except Exception as e:
-            self.log.error(f"setup_gui(): ERROR: Init setup failed: {e.__class__.__name__} {e}")
+            print(f"setup_gui(): ERROR: Init setup failed: {e.__class__.__name__} {e}")
         
         # Set the icon
         try:
             icon_path = Helpers.resource_path("static/BlightVeil.ico")
             if path.exists(icon_path):
                 self.app.iconbitmap(icon_path)
-                #self.log.success(f"Icon loaded successfully from: {icon_path}")
+                #print(f"Icon loaded successfully from: {icon_path}")
             else:
-                self.log.error(f"setup_gui(): ERROR: icon not found at: {icon_path}")
+                print(f"setup_gui(): ERROR: icon not found at: {icon_path}")
         except Exception as e:
-            self.log.error(f"setup_gui(): ERROR: setting icon failed: {e.__class__.__name__} {e}")
+            print(f"setup_gui(): ERROR: setting icon failed: {e.__class__.__name__} {e}")
 
         # Render the banner
         try:
@@ -218,9 +217,9 @@ class GUI():
                 banner_label.image = banner_image
                 banner_label.pack(pady=(10, 0))
             else:
-                self.log.error(f"setup_gui(): ERROR: banner not found at: {icon_path}")
+                print(f"setup_gui(): ERROR: banner not found at: {icon_path}")
         except Exception as e:
-            self.log.error(f"setup_gui(): Error loading banner image: {e.__class__.__name__} {e}")
+            print(f"setup_gui(): Error loading banner image: {e.__class__.__name__} {e}")
 
         # Check for Updates
         try:
@@ -232,7 +231,7 @@ class GUI():
                 update_label.pack(pady=(10, 10))
                 update_label.bind("<Button-1>", self.api.open_github(update_message))
         except Exception as e:
-            self.log.error(f"setup_gui(): Error checking for Kill Tracker updates: {e.__class__.__name__} {e}")
+            print(f"setup_gui(): Error checking for Kill Tracker updates: {e.__class__.__name__} {e}")
 
         if not game_running:
             try:
@@ -249,13 +248,13 @@ class GUI():
                 message_label.pack(pady=(50, 10))
                 #self.log = None #FIXME Why is this here?
             except Exception as e:
-                self.log.error(f"setup_gui(): Error rendering the relaunch message: {e.__class__.__name__} {e}")
+                print(f"setup_gui(): Error rendering the relaunch message: {e.__class__.__name__} {e}")
         else:
             try:
                 # Add GUI buttons if game running
                 self.add_module_buttons()
             except Exception as e:
-                self.log.error(f"setup_gui(): Error rendering the module buttons: {e.__class__.__name__} {e}")
+                print(f"setup_gui(): Error rendering the module buttons: {e.__class__.__name__} {e}")
         
         # Footer
         try:
@@ -271,4 +270,4 @@ class GUI():
             )
             footer_text.pack(pady=5)
         except Exception as e:
-            self.log.error(f"setup_gui(): Error rendering the footer: {e.__class__.__name__} {e}")
+            print(f"setup_gui(): Error rendering the footer: {e.__class__.__name__} {e}")
