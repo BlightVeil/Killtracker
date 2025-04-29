@@ -125,16 +125,18 @@ class LogParser():
             if -1 != line.find("CActor::Kill") and not self.check_substring_list(line, self.ignore_kill_substrings) and upload_kills:
                 kill_result = self.parse_kill_line(line, self.rsi_handle["current"])
                 self.log.debug(f"read_log_line(): kill_result with: {line}.")
-                if kill_result["result"] == "exclusion":
-                    self.log.debug(f"read_log_line(): exclusion with: {line}.")
+                # Do not send
+                if kill_result["result"] == "exclusion" or kill_result["result"] == "reset":
+                    self.log.debug(f"read_log_line(): Not posting {kill_result['result']} death: {line}.")
                     return
-                elif kill_result["result"] == "own_death":
-                    # Log a message for the player's own death
+                # Log a message for the current user's death
+                elif kill_result["result"] == "killed" or kill_result["result"] == "suicide":
                     self.log.info("You have fallen in the service of BlightVeil.")
                     # Send death-event to the server via heartbeat
                     self.cm.post_heartbeat_death_event(kill_result["data"]["player"], kill_result["data"]["zone"])
                     self.destroy_player_zone()
-                elif kill_result["result"] == "other_kill":
+                # Log a message for the current user's kill
+                elif kill_result["result"] == "killer":
                     self.log.success(f"You have killed {kill_result['data']['victim']},")
                     self.log.info(f"and brought glory to BlightVeil.")
                     self.sounds.play_random_sound()
@@ -209,7 +211,7 @@ class LogParser():
                 return False
         return True
 
-    def parse_kill_line(self, line:str, target_name:str):
+    def parse_kill_line(self, line:str, curr_user:str):
         """Parse kill event."""
         try:
             kill_result = {"result": "", "data": {}}
@@ -227,17 +229,28 @@ class LogParser():
             weapon = split_line[15].strip('\'')
             rsi_profile = f"https://robertsspaceindustries.com/citizens/{killed}"
 
-            if killed == killer or killer.lower() == "unknown" or killed == target_name:
-                # Log a message for the player's own death
-                kill_result["result"] = "own_death"
+            if killed == killer:
+                # Current user killed themselves
+                kill_result["result"] = "suicide"
                 kill_result["data"] = {
-                    'player': target_name,
+                    'player': curr_user,
                     'zone': killed_zone
                 }
-            else:
-                kill_result["result"] = "other_kill"
+            elif killed == curr_user:
+                # Current user died
+                kill_result["result"] = "killed"
                 kill_result["data"] = {
-                    'player': target_name,
+                    'player': curr_user,
+                    'zone': killed_zone
+                }
+            elif killer.lower() == "unknown":
+                # Potential Ship reset
+                kill_result["result"] = "reset"
+            else:
+                # Current user killed other player
+                kill_result["result"] = "killer"
+                kill_result["data"] = {
+                    'player': curr_user,
                     'victim': killed,
                     'time': kill_time,
                     'zone': killed_zone,
