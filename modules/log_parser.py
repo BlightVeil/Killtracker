@@ -118,10 +118,11 @@ class LogParser():
                 self.log.debug(f"read_log_line(): destroy_player_zone with: {line}")
                 self.destroy_player_zone()
         elif -1 != line.find(self.rsi_handle["current"]):
+            # NOTE: OnEntityEnterZone not current in logs
             if -1 != line.find("OnEntityEnterZone"):
                 # Send change ship event to the server via heartbeat
                 self.log.debug(f"read_log_line(): set_player_zone with: {line}.")
-                self.set_player_zone(line)    
+                self.set_player_zone(line, False)
             if -1 != line.find("CActor::Kill") and not self.check_substring_list(line, self.ignore_kill_substrings) and upload_kills:
                 kill_result = self.parse_kill_line(line, self.rsi_handle["current"])
                 self.log.debug(f"read_log_line(): kill_result with: {line}.")
@@ -143,6 +144,9 @@ class LogParser():
                     self.api.post_kill_event(kill_result)
                 else:
                     self.log.error(f"Kill failed to parse: {line}")
+        elif -1 != line.find("<Jump Drive State Changed>"):
+            self.log.debug(f"read_log_line(): set_player_zone with: {line}.")
+            self.set_player_zone(line, True)
 
     def set_game_mode(self, line:str) -> None:
         """Parse log for current active game mode."""
@@ -167,15 +171,21 @@ class LogParser():
             self.active_ship["current"] = "N/A"
             self.active_ship_id = "N/A"
 
-    def set_player_zone(self, line:str) -> None:
+    def set_player_zone(self, line: str, use_jd) -> None:
         """Set current active ship zone."""
-        line_index = line.index("-> Entity ") + len("-> Entity ")
+        if not use_jd:
+            line_index = line.index("-> Entity ") + len("-> Entity ")
+        else:
+            line_index = line.index("adam: ") + len("adam: ")
         if 0 == line_index:
             self.log.debug(f"Active Zone Change: {self.active_ship['current']}")
             self.active_ship["current"] = "N/A"
             return
-        potential_zone = line[line_index:].split(' ')[0]
-        potential_zone = potential_zone[1:-1]
+        if not use_jd:
+            potential_zone = line[line_index:].split(' ')[0]
+            potential_zone = potential_zone[1:-1]
+        else:
+            potential_zone = line[line_index:].split(' ')[0]
         for x in self.global_ship_list:
             if potential_zone.startswith(x):
                 self.active_ship["current"] = potential_zone[:potential_zone.rindex('_')]
