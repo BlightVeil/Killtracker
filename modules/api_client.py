@@ -1,7 +1,9 @@
 import requests
 import webbrowser
 from threading import Thread
-from datetime import datetime, timezone
+from datetime import datetime
+import pytz
+from tzlocal import get_localzone
 from packaging import version
 from time import sleep
 
@@ -176,7 +178,7 @@ class API_Client():
                 response_data = response.json()
                 expiration_time_str = response_data.get("expires_at")
                 if expiration_time_str:
-                    return datetime.strptime(expiration_time_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+                    return expiration_time_str
                 else:
                     raise Exception("Key expiration time not sent in Servitor response.")
             else:
@@ -192,7 +194,6 @@ class API_Client():
 
     def start_api_key_countdown(self) -> None:
         """Start the countdown for the API key's expiration, refreshing expiry data periodically."""
-
         def stop_countdown():
             if self.cm:
                 self.cm.stop_heartbeat_threads()
@@ -201,17 +202,17 @@ class API_Client():
             self.gui.api_status_label.config(text="Key Status: Expired", fg=self.key_status_invalid_color)
             self.countdown_active = False
 
+        server_tz = pytz.timezone('US/Mountain')
+        local_tz = get_localzone()
+
         while self.countdown_active:
             try:
                 # Get the expiration time from the server (already returned in UTC)
-                expiration_time = self.post_api_key_expiration_time()
-                if expiration_time:
-                    # Ensure 'expiration_time' is a timezone-aware datetime (set to UTC)
-                    if expiration_time.tzinfo is None:
-                        expiration_time = expiration_time.replace(tzinfo=timezone.utc)
-
-                    # Make sure 'now' is timezone-aware (set to UTC)
-                    now = datetime.now(timezone.utc)
+                expiration_time_str = self.post_api_key_expiration_time()
+                if expiration_time_str:
+                    expiration_time = datetime.strptime(expiration_time_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+                    expiration_time = expiration_time.replace(tzinfo=local_tz)
+                    now = datetime.now(server_tz)
 
                     # Check if the key has expired
                     if now > expiration_time:

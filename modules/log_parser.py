@@ -4,7 +4,7 @@ from threading import Thread
 
 class LogParser():
     """Parses the game.log file for Star Citizen."""
-    def __init__(self, gui_module, api_client_module, sound_module, cm_module, monitoring, rsi_handle, active_ship, anonymize_state):
+    def __init__(self, gui_module, api_client_module, sound_module, cm_module, monitoring, rsi_handle, player_geid, active_ship, anonymize_state):
         self.log = None
         self.gui = gui_module
         self.api = api_client_module
@@ -16,8 +16,10 @@ class LogParser():
         self.anonymize_state = anonymize_state
         self.game_mode = "Nothing"
         self.active_ship_id = "N/A"
-        self.player_geid = "N/A"
+        self.player_geid = player_geid
         self.log_file_location = None
+        self.curr_killstreak = 0
+        self.max_killstreak = 0
         self.kill_total = 0
         
         self.global_ship_list = [
@@ -109,7 +111,7 @@ class LogParser():
             self.set_game_mode(line)
             self.log.debug(f"read_log_line(): set_game_mode with: {line}.")
         elif -1 != line.find("CPlayerShipRespawnManager::OnVehicleSpawned") and (
-                "SC_Default" != self.game_mode) and (-1 != line.find(self.player_geid)):
+                "SC_Default" != self.game_mode) and (-1 != line.find(self.player_geid["current"])):
             self.set_ac_ship(line)
             self.log.debug(f"read_log_line(): set_ac_ship with: {line}.")
         elif ((-1 != line.find("<Vehicle Destruction>")) or (
@@ -133,14 +135,20 @@ class LogParser():
                     return
                 # Log a message for the current user's death
                 elif kill_result["result"] == "killed" or kill_result["result"] == "suicide":
+                    self.curr_killstreak = 0
                     self.log.info("You have fallen in the service of BlightVeil.")
                     # Send death-event to the server via heartbeat
                     self.cm.post_heartbeat_death_event(kill_result["data"]["player"], kill_result["data"]["zone"])
                     self.destroy_player_zone()
                 # Log a message for the current user's kill
                 elif kill_result["result"] == "killer":
+                    self.curr_killstreak += 1
+                    if self.curr_killstreak > self.max_killstreak:
+                        self.max_killstreak = self.curr_killstreak
                     self.kill_total += 1
-                    self.gui.kills_label.config(text=f"Session Kills: {self.kill_total}", fg="yellow")
+                    self.gui.curr_killstreak_label.config(text=f"Current Killstreak: {self.curr_killstreak}", fg="yellow")
+                    self.gui.max_killstreak_label.config(text=f"Max Killstreak: {self.max_killstreak}", fg="yellow")
+                    self.gui.session_kills_label.config(text=f"Total Session Kills: {self.kill_total}", fg="yellow")
                     self.log.success(f"You have killed {kill_result['data']['victim']},")
                     self.log.info(f"and brought glory to BlightVeil.")
                     self.sounds.play_random_sound()
@@ -165,7 +173,7 @@ class LogParser():
     def set_ac_ship(self, line:str) -> None:
         """Parse log for current active ship."""
         self.active_ship["current"] = line.split(' ')[5][1:-1]
-        self.log.debug("Player has entered ship: ", self.active_ship["current"])
+        self.log.debug(f"Player has entered ship: {self.active_ship['current']}")
     
     def destroy_player_zone(self) -> None:
         """Remove current active ship zone."""
@@ -297,15 +305,11 @@ class LogParser():
         self.gui.api_status_label.config(text="Key Status: Error", fg="yellow")
         return ""
 
-    #FIXME unused? <- this is not unused. this was a critical part for getting AC ships to register
-    '''
-    def find_rsi_geid(self) -> None:
+    def find_rsi_geid(self) -> str:
+        """Get the current user's GEID."""
         acct_kw = "AccountLoginCharacterStatus_Character"
         sc_log = open(self.log_file_location, "r")
         lines = sc_log.readlines()
         for line in lines:
             if -1 != line.find(acct_kw):
-                self.player_geid = line.split(' ')[11]
-                self.log.debug(f"Player geid: {self.player_geid}")
-                return
-    '''
+                return line.split(' ')[11]

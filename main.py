@@ -26,6 +26,7 @@ class KillTracker():
         self.heartbeat_status = {"active": False}
         self.anonymize_state = {"enabled": False}
         self.rsi_handle = {"current": "N/A"}
+        self.player_geid = {"current": "N/A"}
         self.active_ship = {"current": "N/A"}
         self.update_queue = Queue()    
         
@@ -110,7 +111,9 @@ class KillTracker():
                     self.log_parser.log_file_location = self.get_sc_log_location(self.get_sc_processes())
                     self.log.success("Star Citizen is running. Starting kill tracking.")
                     self.rsi_handle["current"] = self.log_parser.find_rsi_handle()
-                    self.log.success(f"Current user is {self.rsi_handle['current']}.")
+                    self.log.success(f"Current RSI handle is {self.rsi_handle['current']}.")
+                    self.player_geid["current"] = self.log_parser.find_rsi_geid()
+                    self.log.info(f"Current User GEID is {self.player_geid['current']}.")
                     self.monitoring["active"] = True
                     self.log_parser.start_tail_log_thread()
 
@@ -167,7 +170,7 @@ def main():
 
     try:
         log_parser_module = LogParser(
-            gui_module, api_client_module, sound_module, cm_module, kt.monitoring, kt.rsi_handle, kt.active_ship, kt.anonymize_state
+            gui_module, api_client_module, sound_module, cm_module, kt.monitoring, kt.rsi_handle, kt.player_geid, kt.active_ship, kt.anonymize_state
         )
     except Exception as e:
         print(f"main(): ERROR in setting up the Log Parser module: {e.__class__.__name__} {e}")
