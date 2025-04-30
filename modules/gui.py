@@ -64,6 +64,7 @@ class GUI():
         self.cm = None
         self.key_entry = None
         self.api_status_label = None
+        self.kills_label = None
         self.commander_mode_button = None
 
     def setup_app_log_display(self):
@@ -154,6 +155,13 @@ class GUI():
             self.app, text="Key Status: Not Validated", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
         )
         self.api_status_label.pack(pady=(10, 10))
+        # Update the button to use the new combined function
+
+        # Kills Total Label
+        self.kills_label = self.create_label(
+            self.app, text="Session Kills: 0", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+        )
+        self.kills_label.pack(pady=(10, 10))
         # Update the button to use the new combined function
 
         activate_load_key_button = self.create_button(

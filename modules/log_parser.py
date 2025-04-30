@@ -18,6 +18,7 @@ class LogParser():
         self.active_ship_id = "N/A"
         self.player_geid = "N/A"
         self.log_file_location = None
+        self.kill_total = 0
         
         self.global_ship_list = [
             'DRAK', 'ORIG', 'AEGS', 'ANVL', 'CRUS', 'BANU', 'MISC',
@@ -138,6 +139,8 @@ class LogParser():
                     self.destroy_player_zone()
                 # Log a message for the current user's kill
                 elif kill_result["result"] == "killer":
+                    self.kill_total += 1
+                    self.gui.kills_label.config(text=f"Session Kills: {self.kill_total}", fg="yellow")
                     self.log.success(f"You have killed {kill_result['data']['victim']},")
                     self.log.info(f"and brought glory to BlightVeil.")
                     self.sounds.play_random_sound()
@@ -294,7 +297,7 @@ class LogParser():
         self.gui.api_status_label.config(text="Key Status: Error", fg="yellow")
         return ""
 
-    #FIXME unused?
+    #FIXME unused? <- this is not unused. this was a critical part for getting AC ships to register
     '''
     def find_rsi_geid(self) -> None:
         acct_kw = "AccountLoginCharacterStatus_Character"
