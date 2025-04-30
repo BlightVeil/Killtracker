@@ -1,7 +1,7 @@
 import requests
 import webbrowser
 from threading import Thread
-from datetime import datetime
+from datetime import datetime, timezone
 from packaging import version
 from time import sleep
 
@@ -192,6 +192,7 @@ class API_Client():
 
     def start_api_key_countdown(self) -> None:
         """Start the countdown for the API key's expiration, refreshing expiry data periodically."""
+
         def stop_countdown():
             if self.cm:
                 self.cm.stop_heartbeat_threads()
@@ -199,30 +200,64 @@ class API_Client():
             self.monitoring["active"] = False
             self.gui.api_status_label.config(text="Key Status: Expired", fg=self.key_status_invalid_color)
             self.countdown_active = False
-        
+
         while self.countdown_active:
             try:
-                # Get the expiration time from the server
+                # Get the expiration time from the server (already returned in UTC)
                 expiration_time = self.post_api_key_expiration_time()
                 if expiration_time:
+                    # Ensure 'expiration_time' is a timezone-aware datetime (set to UTC)
+                    if expiration_time.tzinfo is None:
+                        expiration_time = expiration_time.replace(tzinfo=timezone.utc)
+
+                    # Make sure 'now' is timezone-aware (set to UTC)
+                    now = datetime.now(timezone.utc)
+
+                    # Check if the key has expired
+                    if now > expiration_time:
+                        self.log.error(f"Key expired. Please enter a new Kill Tracker key.")
+                        stop_countdown()
+                        continue  # Skip further calculations if expired
+
                     # Calculate the remaining time
-                    remaining_time = expiration_time - datetime.utcnow()
-                    if remaining_time.total_seconds() > 0:
-                        hours, remainder = divmod(remaining_time.seconds, 3600)
-                        minutes, seconds = divmod(remainder, 60)
-                        countdown_text = f"Key Status: Valid (Expires in {remaining_time.days}d {hours}h {minutes}m {seconds}s)"
+                    remaining_time = expiration_time - now
+                    total_seconds = int(remaining_time.total_seconds())
+
+                    # Debugging output
+                    self.log.debug(f"Expiration Time: {expiration_time}")
+                    self.log.debug(f"Current Time (now): {now}")
+                    self.log.debug(f"Remaining Time: {remaining_time}")
+                    self.log.debug(f"Total Seconds Remaining: {total_seconds}")
+
+                    # Break the total seconds into days, hours, minutes, and seconds
+                    days, remainder = divmod(total_seconds, 86400)
+                    hours, remainder = divmod(remainder, 3600)
+                    minutes, seconds = divmod(remainder, 60)
+
+                    # Building the countdown text
+                    if total_seconds > 0:
+                        if days > 0:
+                            countdown_text = f"Key Status: Valid (Expires in {days}d {hours}h)"
+                        elif hours > 0:
+                            countdown_text = f"Key Status: Valid (Expires in {hours}h {minutes}m)"
+                        else:
+                            countdown_text = f"Key Status: Valid (Expires in {minutes}m {seconds}s)"
+                        
                         self.gui.api_status_label.config(text=countdown_text, fg=self.key_status_valid_color)
+
                     else:
                         self.log.error(f"Key expired. Please enter a new Kill Tracker key.")
                         stop_countdown()
+
                 else:
-                    self.log.error(f"Error received from server. Please enter a new Kill Tracker key.")
+                    self.log.error("Error received from server. Please enter a new Kill Tracker key.")
                     stop_countdown()
+
             except Exception as e:
-                self.log.error(f"start_api_key_countdown(): Error in count down: {e.__class__.__name__} {e}")
+                self.log.error(f"start_api_key_countdown(): Error in countdown: {e.__class__.__name__} {e}")
+
             sleep(self.countdown_interval)
-
-
+        
 #########################################################################################################
 ### LOG PARSER API                                                                                    ###
 #########################################################################################################
