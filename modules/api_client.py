@@ -237,11 +237,11 @@ class API_Client():
                     # Building the countdown text
                     if total_seconds > 0:
                         if days > 0:
-                            countdown_text = f"Key Status: Valid (Expires in {days}d {hours}h)"
+                            countdown_text = f"Key Status: Valid (Expires in {days} days)"
                         elif hours > 0:
-                            countdown_text = f"Key Status: Valid (Expires in {hours}h {minutes}m)"
+                            countdown_text = f"Key Status: Valid (Expires in {hours} hours {minutes} minutes)"
                         else:
-                            countdown_text = f"Key Status: Valid (Expires in {minutes}m {seconds}s)"
+                            countdown_text = f"Key Status: Valid (Expires in {minutes} minutes {seconds} seconds)"
                         
                         self.gui.api_status_label.config(text=countdown_text, fg=self.key_status_valid_color)
 
