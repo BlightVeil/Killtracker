@@ -170,7 +170,7 @@ def main():
 
     try:
         log_parser_module = LogParser(
-            gui_module, api_client_module, sound_module, cm_module, kt.monitoring, kt.rsi_handle, kt.player_geid, kt.active_ship, kt.anonymize_state
+            gui_module, api_client_module, sound_module, cm_module, kt.local_version, kt.monitoring, kt.rsi_handle, kt.player_geid, kt.active_ship, kt.anonymize_state
         )
     except Exception as e:
         print(f"main(): ERROR in setting up the Log Parser module: {e.__class__.__name__} {e}")

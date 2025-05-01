@@ -21,8 +21,8 @@ class Sounds():
             self.create_sounds_dir()
             copy_to_user_dir = self.copy_sounds(self.sounds_pyinst_dir, self.sounds_live_dir)
             if copy_to_user_dir:
-                self.log.debug(f"Included sounds found at: {str(self.sounds_live_dir)}")
-                self.log.debug(f"Sound Files inside: {listdir(str(self.sounds_live_dir)) if path.exists(str(self.sounds_live_dir)) else 'Not Found'}")
+                self.log.info(f"Included sounds found at: {str(self.sounds_live_dir)}")
+                self.log.info(f"Sound Files inside: {listdir(str(self.sounds_live_dir)) if path.exists(str(self.sounds_live_dir)) else 'Not Found'}")
                 self.log.success("To add new Sounds to the Kill Tracker, drop in .wav files to the sounds folder.")
         except Exception as e:
             self.log.error(f"setup_sounds(): Error: {e.__class__.__name__} {e}")
@@ -30,9 +30,9 @@ class Sounds():
     def create_sounds_dir(self) -> None:
         """Create directory for sounds and set vars."""
         try:
-            self.sounds_pyinst_dir = Path(Helpers.resource_path("sounds"))  # The PyInstaller temp executable directory
+            self.sounds_pyinst_dir = Path(Helpers.resource_path("static/sounds"))  # The PyInstaller temp executable directory
             self.sounds_live_dir = Path.cwd() / "sounds"  # The directory where the executable lives
-            self.log.debug(f"PyInstaller temp executable directory: {str(self.sounds_live_dir)}")
+            self.log.debug(f"PyInstaller temp executable directory: {str(self.sounds_pyinst_dir)}")
             self.log.debug(f"The directory where the executable lives: {str(self.sounds_live_dir)}")
             # Ensure the folders exist
             self.sounds_pyinst_dir.mkdir(exist_ok=True)
@@ -56,7 +56,7 @@ class Sounds():
             source_files = list(source.glob('**/*.wav'))
             self.log.debug(f"Copying sound files {source_files}")
             for sound_file in source_files:
-                target_path = target / sound_file
+                target_path = target / sound_file.name
                 self.log.debug(f"Target path: {target_path}")
                 # Check if targets doesn't exist
                 if not target_path.exists():

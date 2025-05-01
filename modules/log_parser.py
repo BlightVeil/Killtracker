@@ -4,12 +4,13 @@ from threading import Thread
 
 class LogParser():
     """Parses the game.log file for Star Citizen."""
-    def __init__(self, gui_module, api_client_module, sound_module, cm_module, monitoring, rsi_handle, player_geid, active_ship, anonymize_state):
+    def __init__(self, gui_module, api_client_module, sound_module, cm_module, local_version, monitoring, rsi_handle, player_geid, active_ship, anonymize_state):
         self.log = None
         self.gui = gui_module
         self.api = api_client_module
         self.sounds = sound_module
         self.cm = cm_module
+        self.local_version = local_version
         self.monitoring = monitoring
         self.rsi_handle = rsi_handle
         self.active_ship = active_ship
@@ -136,6 +137,7 @@ class LogParser():
                 # Log a message for the current user's death
                 elif kill_result["result"] == "killed" or kill_result["result"] == "suicide":
                     self.curr_killstreak = 0
+                    self.gui.curr_killstreak_label.config(text=f"Current Killstreak: {self.curr_killstreak}", fg="yellow")
                     self.log.info("You have fallen in the service of BlightVeil.")
                     # Send death-event to the server via heartbeat
                     self.cm.post_heartbeat_death_event(kill_result["data"]["player"], kill_result["data"]["zone"])
@@ -278,7 +280,7 @@ class LogParser():
                     'weapon': weapon,
                     'rsi_profile': rsi_profile,
                     'game_mode': self.game_mode,
-                    'client_ver': "7.0",
+                    'client_ver': self.local_version,
                     'killers_ship': self.active_ship["current"],
                     'anonymize_state': self.anonymize_state
                 }

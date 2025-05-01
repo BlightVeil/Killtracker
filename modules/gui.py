@@ -223,7 +223,7 @@ class GUI():
         
         # Set the icon
         try:
-            icon_path = Helpers.resource_path("BlightVeil.ico")
+            icon_path = Helpers.resource_path("static/BlightVeil.ico")
             if path.exists(icon_path):
                 self.app.iconbitmap(icon_path)
                 #print(f"Icon loaded successfully from: {icon_path}")
@@ -234,7 +234,7 @@ class GUI():
 
         # Render the banner
         try:
-            banner_path = Helpers.resource_path("BlightVeilBanner.png")
+            banner_path = Helpers.resource_path("static/BlightVeilBanner.png")
             if path.exists(banner_path):
                 #self.log.success(f"Banner image loaded successfully from: {banner_path}")
                 banner_image = tk.PhotoImage(file=banner_path)
