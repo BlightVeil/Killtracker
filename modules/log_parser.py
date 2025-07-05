@@ -22,6 +22,7 @@ class LogParser():
         self.curr_killstreak = 0
         self.max_killstreak = 0
         self.kill_total = 0
+        self.death_total = 0
         
         self.global_ship_list = [
             'DRAK', 'ORIG', 'AEGS', 'ANVL', 'CRUS', 'BANU', 'MISC',
@@ -91,6 +92,15 @@ class LogParser():
                     self.log.error("Error: key is invalid. Kill Tracking is not active...")
                     sleep(5)
                     continue
+                # Handle RSI handle first before continuing
+                if self.rsi_handle["current"] == "N/A":
+                    self.log.error(f"RSI handle name has not been found yet. Retrying ...")
+                    self.rsi_handle["current"] = self.find_rsi_handle()
+                    if self.rsi_handle["current"] == "N/A":
+                        sleep(5)
+                        continue
+                    else:
+                        self.log.success(f"Refound RSI handle name: {self.rsi_handle['current']}.")
                 where = sc_log.tell()
                 line = sc_log.readline()
                 if not line:
@@ -128,6 +138,7 @@ class LogParser():
                 self.log.debug(f"read_log_line(): set_player_zone with: {line}.")
                 self.set_player_zone(line, False)
             if -1 != line.find("CActor::Kill") and not self.check_substring_list(line, self.ignore_kill_substrings) and upload_kills:
+                # Parse the kill log
                 kill_result = self.parse_kill_line(line, self.rsi_handle["current"])
                 self.log.debug(f"read_log_line(): kill_result with: {line}.")
                 # Do not send
@@ -138,9 +149,12 @@ class LogParser():
                 elif kill_result["result"] == "killed" or kill_result["result"] == "suicide":
                     self.curr_killstreak = 0
                     self.gui.curr_killstreak_label.config(text=f"Current Killstreak: {self.curr_killstreak}", fg="yellow")
+                    self.death_total += 1
+                    self.gui.session_deaths_label.config(text=f"Total Session Deaths: {self.death_total}", fg="red")
                     self.log.info("You have fallen in the service of BlightVeil.")
+                    self.log.info(f'Killer: {kill_result["data"]["player"]}. Killer Weapon: {kill_result["data"]["weapon"]}. Killer Zone: {kill_result["data"]["player"]}')
                     # Send death-event to the server via heartbeat
-                    self.cm.post_heartbeat_death_event(kill_result["data"]["player"], kill_result["data"]["zone"])
+                    self.cm.post_heartbeat_death_event(kill_result["data"]["victim"], kill_result["data"]["zone"])
                     self.destroy_player_zone()
                 # Log a message for the current user's kill
                 elif kill_result["result"] == "killer":
@@ -148,9 +162,9 @@ class LogParser():
                     if self.curr_killstreak > self.max_killstreak:
                         self.max_killstreak = self.curr_killstreak
                     self.kill_total += 1
-                    self.gui.curr_killstreak_label.config(text=f"Current Killstreak: {self.curr_killstreak}", fg="yellow")
-                    self.gui.max_killstreak_label.config(text=f"Max Killstreak: {self.max_killstreak}", fg="yellow")
-                    self.gui.session_kills_label.config(text=f"Total Session Kills: {self.kill_total}", fg="yellow")
+                    self.gui.curr_killstreak_label.config(text=f"Current Killstreak: {self.curr_killstreak}", fg="green")
+                    self.gui.max_killstreak_label.config(text=f"Max Killstreak: {self.max_killstreak}", fg="green")
+                    self.gui.session_kills_label.config(text=f"Total Session Kills: {self.kill_total}", fg="green")
                     self.log.success(f"You have killed {kill_result['data']['victim']},")
                     self.log.info(f"and brought glory to BlightVeil.")
                     self.sounds.play_random_sound()
@@ -300,12 +314,12 @@ class LogParser():
                 if 0 == line_index:
                     self.log.error("RSI Handle not found. Please ensure the game is running and the log file is accessible.")
                     self.gui.api_status_label.config(text="Key Status: Error", fg="yellow")
-                    return ""
+                    return "N/A"
                 potential_handle = line[line_index:].split(' ')[0]
                 return potential_handle[0:-1]
         self.log.error("RSI Handle not found. Please ensure the game is running and the log file is accessible.")
         self.gui.api_status_label.config(text="Key Status: Error", fg="yellow")
-        return ""
+        return "N/A"
 
     def find_rsi_geid(self) -> str:
         """Get the current user's GEID."""

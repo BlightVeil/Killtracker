@@ -180,6 +180,12 @@ class GUI():
         )
         self.session_kills_label.pack(side=tk.RIGHT, pady=(10, 10))
 
+        # Deaths Total Label
+        self.session_deaths_label = self.create_label(
+            kill_frame, text="Total Session Deaths: 0", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+        )
+        self.session_deaths_label.pack(side=tk.RIGHT, pady=(10, 10))
+
         # Update the button to use the new combined function
         activate_load_key_button = self.create_button(
             key_frame, text="Activate & Load Key", font=("Times New Roman", 12), command=self.api.load_activate_key, bg="#000000", fg="#ffffff"

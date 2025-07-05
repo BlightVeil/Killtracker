@@ -97,7 +97,10 @@ class API_Client():
                 return False
             return True
         except requests.RequestException as e:
-            self.log.error(f"validate_api_key(): Error: {e.__class__.__name__} {e}")
+            self.log.error(f"validate_api_key(): Request Error: {e.__class__.__name__} {e}")
+            return False
+        except Exception as e:
+            self.log.error(f"validate_api_key(): General Error: {e.__class__.__name__} {e}")
             return False
         
     def load_api_key(self) -> None:
@@ -146,7 +149,7 @@ class API_Client():
                     self.api_key["value"] = None
                     self.gui.api_status_label.config(text="Key Status: Invalid", fg=self.key_status_invalid_color)
             else:
-                self.log.error("Error: Invalid RSI handle name.")
+                self.log.error("Error: RSI handle name has not been found yet!")
                 self.gui.api_status_label.config(text="Key Status: Invalid", fg=self.key_status_invalid_color)
         except Exception as e:
             self.log.error(f"Error activating key: {e.__class__.__name__} {e}")
@@ -154,10 +157,6 @@ class API_Client():
     def post_api_key_expiration_time(self):
         """Retrieve the expiration time for the API key from the validation server."""
         try:
-            if not self.api_key["value"]:
-                self.log.error("Error: death event will not be sent because the Kill Tracker key does not exist.")
-                return
-            
             url = f"{self.api_fqdn}/validateKey"
             headers = {
                 "Authorization": self.api_key["value"],
@@ -176,11 +175,13 @@ class API_Client():
             self.log.debug(f"post_api_key_expiration_time(): Response text: {response.text}")
             if response.status_code == 200:
                 response_data = response.json()
-                expiration_time_str = response_data.get("expires_at")
-                if expiration_time_str:
-                    return expiration_time_str
+                post_key_exp_result = response_data.get("expires_at")
+                if post_key_exp_result:
+                    return post_key_exp_result
                 else:
-                    raise Exception("Key expiration time not sent in Servitor response.")
+                    self.log.error("Error: Key expiration time not sent in Servitor response.")
+            elif response.status_code == 403:
+                return "invalidated"
             else:
                 self.log.error(f"Error in posting key expiration time: code {response.status_code}")
         except requests.exceptions.RequestException as e:
@@ -189,8 +190,8 @@ class API_Client():
             self.log.error(f"Error: key expiration time will not be sent!")
         except Exception as e:
             self.log.error(f"post_api_key_expiration_time(): Error: {e.__class__.__name__} {e}")
-        # Fallback: Expire immediately if there's an error
-        return None
+        # Fallback
+        return "error"
 
     def start_api_key_countdown(self) -> None:
         """Start the countdown for the API key's expiration, refreshing expiry data periodically."""
@@ -207,10 +208,21 @@ class API_Client():
 
         while self.countdown_active:
             try:
+                if not self.api_key["value"]:
+                    raise Exception("Request to get the expiration time will not be sent because the API key does not exist.")
+                if self.rsi_handle["current"] == "N/A":
+                    raise Exception("RSI handle name has not been found yet!")
                 # Get the expiration time from the server (already returned in UTC)
-                expiration_time_str = self.post_api_key_expiration_time()
-                if expiration_time_str:
-                    expiration_time = datetime.strptime(expiration_time_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+                post_key_exp_result = self.post_api_key_expiration_time()
+                if post_key_exp_result == "error":
+                    self.log.warning("Failed to get the key expiration time. Continuing anyway ...")
+                elif post_key_exp_result == "invalidated":
+                    self.log.error("Key has been invalidated by Servitor. Please get a new key or speak with a BlightVeil admin.")
+                    stop_countdown()
+                    continue # Skip further calculations if invalidated
+                # Expiration time was returned
+                else:
+                    expiration_time = datetime.strptime(post_key_exp_result, "%Y-%m-%dT%H:%M:%S.%fZ")
                     expiration_time = expiration_time.replace(tzinfo=local_tz)
                     now = datetime.now(server_tz)
 
@@ -218,7 +230,7 @@ class API_Client():
                     if now > expiration_time:
                         self.log.error(f"Key expired. Please enter a new Kill Tracker key.")
                         stop_countdown()
-                        continue  # Skip further calculations if expired
+                        continue # Skip further calculations if expired
 
                     # Calculate the remaining time
                     remaining_time = expiration_time - now
@@ -249,13 +261,8 @@ class API_Client():
                     else:
                         self.log.error(f"Key expired. Please enter a new Kill Tracker key.")
                         stop_countdown()
-
-                else:
-                    self.log.error("Error received from server. Please enter a new Kill Tracker key.")
-                    stop_countdown()
-
             except Exception as e:
-                self.log.error(f"start_api_key_countdown(): Error in countdown: {e.__class__.__name__} {e}")
+                self.log.error(f"General error in key expiration countdown: {e.__class__.__name__} {e}")
 
             sleep(self.countdown_interval)
         
@@ -284,7 +291,9 @@ class API_Client():
                 timeout=self.request_timeout
             )
             self.log.debug(f"post_kill_event(): Response text: {response.text}")
-            if response.status_code != 200:
+            if response.status_code == 200:
+                self.log.success(f'Your kill of {kill_result["data"]["victim"]} has been posted to Servitor!')
+            else:
                 self.log.error(f"Error when posting kill: code {response.status_code}")
                 self.log.error(f"Error: kill event {kill_result} will not be sent!")
         except requests.exceptions.RequestException as e:
