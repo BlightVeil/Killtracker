@@ -201,6 +201,7 @@ class GUI():
             options_frame, text="Commander Mode", font=("Times New Roman", 12), command=self.cm.setup_commander_mode, bg="#000000", fg="#ffffff"
         )
         self.commander_mode_button.pack(side=tk.LEFT, pady=(10, 10))
+        
 
         # App log text area
         self.log = AppLogger(self.setup_app_log_display())
@@ -215,6 +216,31 @@ class GUI():
             options_frame, text=" Enable Debug Mode ", font=("Times New Roman", 12), command=self.toggle_debug, bg="#000000", fg="#ffffff"
         )
         self.debug_button.pack(side=tk.RIGHT, padx=(5, 0), pady=(5, 5))
+        
+        # Volume Slider Frame
+        volume_frame = tk.Frame(self.app, bg="#484759")
+        volume_frame.pack(pady=(5, 10))
+
+        volume_label = self.create_label(
+            volume_frame, text="🔊 Volume", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+        )
+        volume_label.pack(side=tk.LEFT, padx=(5, 10))
+
+        volume_slider = tk.Scale(
+            volume_frame,
+            from_=0,
+            to=100,
+            orient=tk.HORIZONTAL,
+            length=200,
+            bg="#484759",
+            fg="#ffffff",
+            troughcolor="#282a36",
+            highlightbackground="#484759",
+            command=lambda val: self.sounds.set_volume(int(val) / 100)
+        )
+        volume_slider.set(50)  # Default volume to 50%
+        volume_slider.pack(side=tk.LEFT)
+
 
     def setup_gui(self, game_running):
         """Setup the GUI."""

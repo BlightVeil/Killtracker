@@ -150,6 +150,20 @@ def main():
         print(f"main(): ERROR in creating the GUI module: {e.__class__.__name__} {e}")
 
     try:
+        sound_module = Sounds()          # Create Sounds instance first
+        sound_module.log = gui_module.log  # Assign logger immediately
+    except Exception as e:
+        print(f"main(): ERROR in setting up the Sounds module: {e.__class__.__name__} {e}")
+    # Link Sounds to GUI here
+    try:
+        gui_module.sounds = sound_module
+    except Exception as e:
+        print(f"main(): ERROR linking Sounds to GUI: {e.__class__.__name__} {e}")
+    try:
+        sound_module.setup_sounds()     # Setup sounds only after log is assigned
+    except Exception as e:
+        print(f"main(): ERROR in setting up the sounds module: {e.__class__.__name__} {e}")
+    try:
         api_client_module = API_Client(
             gui_module, kt.monitoring, kt.local_version, kt.rsi_handle
         )
@@ -157,16 +171,11 @@ def main():
         print(f"main(): ERROR in setting up the API Client module: {e.__class__.__name__} {e}")
 
     try:
-        sound_module = Sounds()
-    except Exception as e:
-        print(f"main(): ERROR in setting up the Sounds module: {e.__class__.__name__} {e}")
-
-    try:
         cm_module = CM_Core(
             gui_module, api_client_module, kt.monitoring, kt.heartbeat_status, kt.rsi_handle, kt.active_ship, kt.update_queue
         )
     except Exception as e:
-        print(f"main(): ERROR in setting up the API Client module: {e.__class__.__name__} {e}")
+        print(f"main(): ERROR in setting up the Commander Mode Core module: {e.__class__.__name__} {e}")
 
     try:
         log_parser_module = LogParser(
