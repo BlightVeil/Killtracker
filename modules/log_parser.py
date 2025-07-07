@@ -154,7 +154,7 @@ class LogParser():
                     self.log.info("You have fallen in the service of BlightVeil.")
                     self.log.info(f'Killer: {kill_result["data"]["player"]}. Killer Weapon: {kill_result["data"]["weapon"]}. Killer Zone: {kill_result["data"]["player"]}')
                     # Send death-event to the server via heartbeat
-                    self.cm.post_heartbeat_death_event(kill_result["data"]["victim"], kill_result["data"]["zone"])
+                    self.cm.post_heartbeat_event(kill_result["data"]["victim"], kill_result["data"]["zone"], None)
                     self.destroy_player_zone()
                 # Log a message for the current user's kill
                 elif kill_result["result"] == "killer":
@@ -218,7 +218,7 @@ class LogParser():
                 self.active_ship["current"] = potential_zone[:potential_zone.rindex('_')]
                 self.active_ship_id = potential_zone[potential_zone.rindex('_') + 1:]
                 self.log.debug(f"Active Zone Change: {self.active_ship['current']} with ID: {self.active_ship_id}")
-                self.cm.post_heartbeat_enter_ship_event(self.active_ship["current"])
+                self.cm.post_heartbeat_event(None, None, self.active_ship["current"])
                 return
 
     def check_substring_list(self, line, substring_list:list) -> bool:
