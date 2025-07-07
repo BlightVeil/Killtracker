@@ -127,7 +127,7 @@ class CM_Core(CM_API_Client, CM_GUI):
                     if user['status'] == "dead":
                         self.allocated_forces_listbox.itemconfig(index, {'fg': 'red'})
                     elif user['status'] == "alive":
-                        self.allocated_forces_listbox.itemconfig(index, {'fg': 'green'})
+                        self.allocated_forces_listbox.itemconfig(index, {'fg': '#04B431'})
         except Exception as e:
             self.log.error(f"update_allocated_forces(): Error: {e.__class__.__name__} - {e}")
 

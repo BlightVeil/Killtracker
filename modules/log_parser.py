@@ -1,6 +1,7 @@
 from time import sleep
 from os import stat
 from threading import Thread
+from sc_data.weapons import weaponMapping
 
 class LogParser():
     """Parses the game.log file for Star Citizen."""
@@ -152,7 +153,8 @@ class LogParser():
                     self.death_total += 1
                     self.gui.session_deaths_label.config(text=f"Total Session Deaths: {self.death_total}", fg="red")
                     self.log.info("You have fallen in the service of BlightVeil.")
-                    self.log.info(f'Killer: {kill_result["data"]["player"]}. Killer Weapon: {kill_result["data"]["weapon"]}. Killer Zone: {kill_result["data"]["player"]}')
+                    if kill_result["result"] == "killed":
+                        self.log.info(f'You were killed by {kill_result["data"]["killer"]} with {kill_result["data"]["weapon"]}')
                     # Send death-event to the server via heartbeat
                     self.cm.post_heartbeat_event(kill_result["data"]["victim"], kill_result["data"]["zone"], None)
                     self.destroy_player_zone()
@@ -162,9 +164,9 @@ class LogParser():
                     if self.curr_killstreak > self.max_killstreak:
                         self.max_killstreak = self.curr_killstreak
                     self.kill_total += 1
-                    self.gui.curr_killstreak_label.config(text=f"Current Killstreak: {self.curr_killstreak}", fg="green")
-                    self.gui.max_killstreak_label.config(text=f"Max Killstreak: {self.max_killstreak}", fg="green")
-                    self.gui.session_kills_label.config(text=f"Total Session Kills: {self.kill_total}", fg="green")
+                    self.gui.curr_killstreak_label.config(text=f"Current Killstreak: {self.curr_killstreak}", fg="#04B431")
+                    self.gui.max_killstreak_label.config(text=f"Max Killstreak: {self.max_killstreak}", fg="#04B431")
+                    self.gui.session_kills_label.config(text=f"Total Session Kills: {self.kill_total}", fg="#04B431")
                     self.log.success(f"You have killed {kill_result['data']['victim']},")
                     self.log.info(f"and brought glory to BlightVeil.")
                     self.sounds.play_random_sound()
@@ -247,6 +249,17 @@ class LogParser():
                 self.log.info("Self-destruct detected in Squadron Battle, ignoring kill!")
                 return False
         return True
+    
+    def get_weapon(self, weapon:str) -> str:
+        """Get the human readable weapon string from the parsed weapon log value."""
+        try:
+            for raw_weapon, hr_weapon in weaponMapping.items():
+                # Weapon log value contains item UUID, sigh
+                if raw_weapon in weapon:
+                    return hr_weapon
+        except Exception as e:
+            self.log.error(f"get_weapon(): Error: {e.__class__.__name__} {e}")
+            return weapon
 
     def parse_kill_line(self, line:str, curr_user:str):
         """Parse kill event."""
@@ -271,14 +284,19 @@ class LogParser():
                 kill_result["result"] = "suicide"
                 kill_result["data"] = {
                     'player': curr_user,
+                    'weapon': weapon,
                     'zone': killed_zone
                 }
             elif killed == curr_user:
+                mapped_weapon = self.get_weapon(weapon)
                 # Current user died
                 kill_result["result"] = "killed"
                 kill_result["data"] = {
                     'player': curr_user,
-                    'zone': killed_zone
+                    'victim': curr_user,
+                    'killer': killer,
+                    'weapon': mapped_weapon,
+                    'zone': self.active_ship["current"]
                 }
             elif killer.lower() == "unknown":
                 # Potential Ship reset

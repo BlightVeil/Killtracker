@@ -154,7 +154,7 @@ class GUI():
 
         # API Status Label
         self.api_status_label = self.create_label(
-            self.app, text="Key Status: Not Validated", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+            self.app, text="Key Status: Not Validated", font=("Times New Roman", 12, 'bold'), fg="#ff0000", bg="#484759"
         )
         self.api_status_label.pack(pady=(10, 10))
 
@@ -164,27 +164,27 @@ class GUI():
 
         # Current Killstreak Label
         self.curr_killstreak_label = self.create_label(
-            kill_frame, text="Current Killstreak: 0", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+            kill_frame, text="Current Killstreak: 0", font=("Times New Roman", 12, 'bold'), fg="#ffffff", bg="#484759"
         )
         self.curr_killstreak_label.pack(side=tk.LEFT, padx=(0, 20), pady=(10, 10))
 
         # Max KillStreak Label
         self.max_killstreak_label = self.create_label(
-            kill_frame, text="Max Killstreak: 0", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+            kill_frame, text="Max Killstreak: 0", font=("Times New Roman", 12, 'bold'), fg="#ffffff", bg="#484759"
         )
         self.max_killstreak_label.pack(side=tk.LEFT, padx=(0, 20), pady=(10, 10))
 
         # Kills Total Label
         self.session_kills_label = self.create_label(
-            kill_frame, text="Total Session Kills: 0", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+            kill_frame, text="Total Session Kills: 0", font=("Times New Roman", 12, 'bold'), fg="#ffffff", bg="#484759"
         )
-        self.session_kills_label.pack(side=tk.RIGHT, pady=(10, 10))
+        self.session_kills_label.pack(side=tk.LEFT, padx=(0, 20), pady=(10, 10))
 
         # Deaths Total Label
         self.session_deaths_label = self.create_label(
-            kill_frame, text="Total Session Deaths: 0", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+            kill_frame, text="Total Session Deaths: 0", font=("Times New Roman", 12, 'bold'), fg="#ffffff", bg="#484759"
         )
-        self.session_deaths_label.pack(side=tk.RIGHT, pady=(10, 10))
+        self.session_deaths_label.pack(side=tk.LEFT, padx=(0, 20), pady=(10, 10))
 
         # Update the button to use the new combined function
         activate_load_key_button = self.create_button(

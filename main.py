@@ -34,7 +34,7 @@ class KillTracker():
         """Check if a process is running by name."""
         try:
             for proc in process_iter(['name', 'exe']):
-                if process_name.lower() in proc.info['name'].lower():
+                if process_name.lower() == proc.info['name'].lower():
                     return proc.info['exe']
         except Exception as e:
             self.log.error(f"check_if_process_running(): Error: {e.__class__.__name__} {e}")
@@ -43,7 +43,7 @@ class KillTracker():
     def is_game_running(self) -> bool:
         """Check if Star Citizen is running."""
         try:
-            if self.check_if_process_running("StarCitizen"):
+            if self.check_if_process_running("StarCitizen_Launcher.exe"):
                 return True
             return False
         except Exception as e:
@@ -53,14 +53,14 @@ class KillTracker():
         """Check for RSI Launcher and Star Citizen Launcher, and get the log path."""
         try:
             # Check if RSI Launcher is running
-            rsi_launcher_path = self.check_if_process_running("RSI Launcher")
+            rsi_launcher_path = self.check_if_process_running("RSI Launcher.exe")
             if not rsi_launcher_path:
                 self.log.warning("RSI Launcher not running.")
                 return ""
             self.log.debug(f"RSI Launcher running at: {rsi_launcher_path}")
 
             # Check if Star Citizen Launcher is running
-            sc_launcher_path = self.check_if_process_running("StarCitizen")
+            sc_launcher_path = self.check_if_process_running("StarCitizen_Launcher.exe")
             if not sc_launcher_path:
                 self.log.warning("Star Citizen Launcher not running.")
                 return ""
