@@ -74,7 +74,7 @@ class CM_Core(CM_API_Client, CM_GUI):
         except Exception as e:
             self.log.error(f"take_command(): Error: {e.__class__.__name__} - {e}")
 
-    def abort_command(self) -> None:
+    def abort_command_func(self) -> None:
         """Set flag to abort command and discard remaining kill counts"""
         try:
             if self.is_commander:
@@ -85,7 +85,7 @@ class CM_Core(CM_API_Client, CM_GUI):
         except Exception as e:
             self.log.error(f"abort_command(): Error: {e.__class__.__name__} - {e}")
 
-    def start_battle(self) -> None:
+    def start_battle_func(self) -> None:
         """Set flag to abort command and discard remaining kill counts"""
         try:
             self.start_battle = True
@@ -97,7 +97,7 @@ class CM_Core(CM_API_Client, CM_GUI):
     # TODO
     # def pass_command
 
-    def mark_battle_complete(self) -> None:
+    def mark_battle_complete_func(self) -> None:
         """Set flag to mark battle complete. Will take the name of the battle and post it with servitor."""
         try:
             self.start_battle = False

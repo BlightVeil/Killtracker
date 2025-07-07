@@ -80,12 +80,9 @@ class CM_API_Client():
                     'status': status,
                     'mode': "commander",
                     'is_commander': self.is_commander,
-                    'mark_complete': self.mark_complete,
-                    'start_battle': self.start_battle,
-                    'abort_command': self.abort_command,
                 }
                 if self.is_commander is True:
-                    heartbeart_base['alloc_users'] = self.alloc_users
+                    heartbeart_base['alloc_users'] = self.alloc_users if self.alloc_users else None
                 headers = {
                     'content-type': 'application/json',
                     'Authorization': self.api_key["value"] if self.api_key["value"] else ""
