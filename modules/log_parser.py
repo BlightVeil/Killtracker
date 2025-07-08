@@ -158,6 +158,7 @@ class LogParser():
                     # Send death-event to the server via heartbeat
                     self.cm.post_heartbeat_event(kill_result["data"]["victim"], kill_result["data"]["zone"], None)
                     self.destroy_player_zone()
+                    self.update_kd_ratio()
                 # Log a message for the current user's kill
                 elif kill_result["result"] == "killer":
                     self.curr_killstreak += 1
@@ -171,6 +172,7 @@ class LogParser():
                     self.log.info(f"and brought glory to BlightVeil.")
                     self.sounds.play_random_sound()
                     self.api.post_kill_event(kill_result)
+                    self.update_kd_ratio()
                 else:
                     self.log.error(f"Kill failed to parse: {line}")
         elif -1 != line.find("<Jump Drive State Changed>"):
@@ -347,3 +349,34 @@ class LogParser():
         for line in lines:
             if -1 != line.find(acct_kw):
                 return line.split(' ')[11]
+                
+    def update_kd_ratio(self):
+        print(f"DEBUG: Kills={self.kill_total}, Deaths={self.death_total}")  # <-- Add this line
+        if self.kill_total == 0 and self.death_total == 0:
+            kd_display = "--"
+        elif self.death_total == 0:
+            kd_display = "∞"
+        else:
+            kd = self.kill_total / self.death_total
+            kd_display = f"{kd:.2f}"
+
+        # Update the KD label in the GUI
+        if hasattr(self.gui, 'kd_ratio_label'):
+            self.gui.kd_ratio_label.config(text=f"KD Ratio: {kd_display}", fg="#00FFFF")
+
+
+    # When user dies:
+    def handle_player_death(self):
+        self.curr_killstreak = 0
+        self.death_total += 1
+        # ... other updates ...
+        self.update_kd_ratio()
+
+    # When user gets a kill:
+    def handle_player_kill(self):
+        self.curr_killstreak += 1
+        if self.curr_killstreak > self.max_killstreak:
+            self.max_killstreak = self.curr_killstreak
+        self.kill_total += 1
+        # ... other updates ...
+        self.update_kd_ratio()

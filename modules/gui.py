@@ -185,6 +185,12 @@ class GUI():
             kill_frame, text="Total Session Deaths: 0", font=("Times New Roman", 12, 'bold'), fg="#ffffff", bg="#484759"
         )
         self.session_deaths_label.pack(side=tk.LEFT, padx=(0, 20), pady=(10, 10))
+        
+        # KD Ratio Label
+        self.kd_ratio_label = self.create_label(
+            kill_frame, text="KD Ratio: --", font=("Times New Roman", 12), fg="#00FFFF", bg="#484759"
+        )
+        self.kd_ratio_label.pack(side=tk.RIGHT, padx=(10, 10), pady=(10, 10))
 
         # Update the button to use the new combined function
         activate_load_key_button = self.create_button(
