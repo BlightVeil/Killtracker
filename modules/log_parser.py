@@ -351,7 +351,7 @@ class LogParser():
                 return line.split(' ')[11]
                 
     def update_kd_ratio(self):
-        print(f"DEBUG: Kills={self.kill_total}, Deaths={self.death_total}")  # <-- Add this line
+        print(f"DEBUG: Kills={self.kill_total}, Deaths={self.death_total}")
         if self.kill_total == 0 and self.death_total == 0:
             kd_display = "--"
         elif self.death_total == 0:
@@ -363,7 +363,6 @@ class LogParser():
         # Update the KD label in the GUI
         if hasattr(self.gui, 'kd_ratio_label'):
             self.gui.kd_ratio_label.config(text=f"KD Ratio: {kd_display}", fg="#00FFFF")
-
 
     # When user dies:
     def handle_player_death(self):
