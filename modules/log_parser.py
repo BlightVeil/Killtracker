@@ -97,10 +97,7 @@ class LogParser():
                 if self.rsi_handle["current"] == "N/A":
                     self.log.error(f"RSI handle name has not been found yet. Retrying ...")
                     self.rsi_handle["current"] = self.find_rsi_handle()
-                    if self.rsi_handle["current"] == "N/A":
-                        sleep(5)
-                        continue
-                    else:
+                    if self.rsi_handle["current"] != "N/A":
                         self.log.success(f"Refound RSI handle name: {self.rsi_handle['current']}.")
                 where = sc_log.tell()
                 line = sc_log.readline()
