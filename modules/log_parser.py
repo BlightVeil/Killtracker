@@ -1,7 +1,6 @@
 from time import sleep
 from os import stat
 from threading import Thread
-from sc_data.weapons import weaponMapping
 
 class LogParser():
     """Parses the game.log file for Star Citizen."""
@@ -29,14 +28,6 @@ class LogParser():
             'DRAK', 'ORIG', 'AEGS', 'ANVL', 'CRUS', 'BANU', 'MISC',
             'KRIG', 'XNAA', 'ARGO', 'VNCL', 'ESPR', 'RSI', 'CNOU',
             'GRIN', 'TMBL', 'GAMA'
-        ]
-        # Substrings to ignore
-        self.ignore_kill_substrings = [
-            'PU_Pilots',
-            'NPC_Archetypes',
-            'PU_Human',
-            'kopion',
-            'marok',
         ]
 
     def start_tail_log_thread(self) -> None:
@@ -135,7 +126,7 @@ class LogParser():
                 # Send change ship event to the server via heartbeat
                 self.log.debug(f"read_log_line(): set_player_zone with: {line}.")
                 self.set_player_zone(line, False)
-            if -1 != line.find("CActor::Kill") and not self.check_substring_list(line, self.ignore_kill_substrings) and upload_kills:
+            if -1 != line.find("CActor::Kill") and not self.check_ignored_victims(line) and upload_kills:
                 # Parse the kill log
                 kill_result = self.parse_kill_line(line, self.rsi_handle["current"])
                 self.log.debug(f"read_log_line(): kill_result with: {line}.")
@@ -222,10 +213,11 @@ class LogParser():
                 self.cm.post_heartbeat_event(None, None, self.active_ship["current"])
                 return
 
-    def check_substring_list(self, line, substring_list:list) -> bool:
-        """Check if any substring from the list is present in the given line."""
-        for substring in substring_list:
-            if substring.lower() in line.lower():
+    def check_ignored_victims(self, line) -> bool:
+        """Check if any ignored victims are present in the given line."""
+        for data in self.api.sc_data["ignoredVictimRules"]:
+            if data["value"].lower() in line.lower():
+                self.log.debug(f"Found the human readable string: {data['value']} in the raw log string: {line}")
                 return True
         return False
 
@@ -249,16 +241,17 @@ class LogParser():
                 return False
         return True
     
-    def get_weapon(self, weapon:str) -> str:
-        """Get the human readable weapon string from the parsed weapon log value."""
+    def get_sc_data(self, data_type:str, data_id:str) -> str:
+        """Get the human readable string from the parsed log value."""
         try:
-            for raw_weapon, hr_weapon in weaponMapping.items():
-                # Weapon log value contains item UUID, sigh
-                if raw_weapon in weapon:
-                    return hr_weapon
+            for data in self.api.sc_data[data_type]:
+                if data["id"] == data_id:
+                    self.log.debug(f"Found the human readable string: {data['name']} of the raw log string: {data_id}")
+                    return data["name"]
+            self.log.warning(f"Did not find the human readable version of the raw log string: {data_id}")
         except Exception as e:
             self.log.error(f"get_weapon(): Error: {e.__class__.__name__} {e}")
-            return weapon
+            return data_id
 
     def parse_kill_line(self, line:str, curr_user:str):
         """Parse kill event."""
@@ -287,7 +280,7 @@ class LogParser():
                     'zone': killed_zone
                 }
             elif killed == curr_user:
-                mapped_weapon = self.get_weapon(weapon)
+                mapped_weapon = self.get_sc_data("weapons", weapon)
                 # Current user died
                 kill_result["result"] = "killed"
                 kill_result["data"] = {

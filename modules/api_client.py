@@ -20,6 +20,7 @@ class API_Client():
         self.api_key = {"value": None}
         self.api_key_filename = "killtracker_key.cfg"
         self.api_fqdn = "http://drawmyoshi.com:25966"
+        self.sc_data = {}
         self.expiration_time = None
         self.countdown_active = False
         self.countdown_interval = 60
@@ -255,9 +256,15 @@ class API_Client():
                             countdown_text = f"Key Status: Valid (Expires in {hours} hours {minutes} minutes)"
                         else:
                             countdown_text = f"Key Status: Valid (Expires in {minutes} minutes {seconds} seconds)"
-                        
                         self.gui.api_status_label.config(text=countdown_text, fg=self.key_status_valid_color)
-
+                        # Update local SC data
+                        self.log.debug("Pulling SC data mappings from Servitor.")
+                        self.get_data_map("weapons")
+                        sleep(1)
+                        self.get_data_map("ships")
+                        sleep(1)
+                        self.get_data_map("ignored-victims")
+                        sleep(1)
                     else:
                         self.log.error(f"Key expired. Please enter a new Kill Tracker key.")
                         stop_countdown()
@@ -270,6 +277,38 @@ class API_Client():
 ### LOG PARSER API                                                                                    ###
 #########################################################################################################
 
+    def get_data_map(self, data_type:str) -> None:
+        """Get data map from the server."""
+        try:
+            if not self.api_key["value"]:
+                self.log.warning("Error: Data map for {} will not be pulled because the key does not exist. Using default mappings.")
+                return
+            
+            url = f"{self.api_fqdn}/api/server/data/{data_type}"
+            headers = {
+                'Authorization': self.api_key["value"] if self.api_key["value"] else ""
+            }
+            self.log.debug(f"get_data_map(): Requesting data for {data_type} from Servitor.")
+            response = requests.get(
+                url, 
+                headers=headers, 
+                timeout=self.request_timeout
+            )
+            self.log.debug(f"get_data_map(): Response text: {response.text}")
+            if response.status_code == 200:
+                self.log.debug(f'{data_type} data has been downloaded from Servitor.')
+                # Merge incoming SC data into new dict
+                if data_type not in self.sc_data or self.sc_data[data_type] != response.json():
+                    self.log.debug(f"get_data_map(): Local SC data for the Kill Tracker differs from Servitor data. Updating local data for {data_type}")
+                    self.sc_data = self.sc_data | response.json()
+                else:
+                    self.log.debug(f"get_data_map(): Local SC data for {data_type} in the Kill Tracker is the same as on Servitor.")
+            else:
+                self.log.error(f"{response.status_code} Error when pulling data for {data_type}.")
+        except requests.exceptions.RequestException as e:
+            self.log.error(f"HTTP Error when pulling data for {data_type}: {e}")
+        except Exception as e:
+            self.log.error(f"get_data_map(): Error: {e.__class__.__name__} {e}")
 
     def post_kill_event(self, kill_result:dict) -> None:
         """Post the kill parsed from the log."""
