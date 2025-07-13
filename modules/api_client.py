@@ -263,7 +263,7 @@ class API_Client():
                         sleep(1)
                         self.get_data_map("ships")
                         sleep(1)
-                        self.get_data_map("ignored-victims")
+                        self.get_data_map("ignoredVictimRules")
                         sleep(1)
                     else:
                         self.log.error(f"Key expired. Please enter a new Kill Tracker key.")
