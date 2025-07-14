@@ -301,7 +301,7 @@ class API_Client():
                 server_data = response.json()[data_type]
                 diff = list(itertools.filterfalse(lambda x: x in self.sc_data[data_type], server_data)) + list(itertools.filterfalse(lambda x: x in server_data, self.sc_data[data_type]))
                 if len(diff) > 0:
-                    self.log.info(f"get_data_map(): Local SC data for the Kill Tracker differs from Servitor data. Updating local data for {data_type}")
+                    self.log.debug(f"get_data_map(): Local SC data for the Kill Tracker differs from Servitor data. Updating local data for {data_type}")
                     self.log.debug(f'get_data_map(): Diff for {data_type} data: {diff}')
                     self.sc_data[data_type] = server_data
                 else:
