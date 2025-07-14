@@ -214,6 +214,12 @@ class GUI():
             kill_frame, text="KD Ratio: --", font=("Times New Roman", 12, 'bold'), fg="#00FFFF", bg="#484759"
         )
         self.kd_ratio_label.pack(side=tk.RIGHT, padx=(0, 20), pady=(0, 0))
+        
+        # Vehicle Status Label
+        self.vehicle_status_label = self.create_label(
+            kill_frame, text="Status: FPS", font=("Times New Roman", 12, 'bold'), fg="#FFD700", bg="#484759"
+        )
+        self.vehicle_status_label.pack(side=tk.RIGHT, padx=(0, 20), pady=(0, 0))
 
         # Update the button to use the new combined function
         activate_load_key_button = self.create_button(
@@ -265,6 +271,12 @@ class GUI():
         self.log = AppLogger(self.setup_app_log_display())
         self.log.text_widget.pack(padx=10, pady=10)
 
+    def update_vehicle_status(self, status_text):
+        if hasattr(self, 'vehicle_status_label') and self.vehicle_status_label:
+            self.vehicle_status_label.config(text=f"Status: {status_text}")
+            self.app.update_idletasks() 
+        else:
+            self.log.error("update_vehicle_status(): vehicle_status_label is not set or does not exist.")
 
     def setup_gui(self, game_running):
         """Setup the GUI."""

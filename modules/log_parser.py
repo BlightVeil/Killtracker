@@ -1,3 +1,4 @@
+import re
 from time import sleep
 from os import stat
 from threading import Thread
@@ -14,6 +15,9 @@ class LogParser():
         self.monitoring = monitoring
         self.rsi_handle = rsi_handle
         self.active_ship = active_ship
+        if not self.active_ship.get("current"):
+            self.active_ship["current"] = "FPS"
+        self.active_ship_id = "N/A"
         self.anonymize_state = anonymize_state
         self.game_mode = "Nothing"
         self.active_ship_id = "N/A"
@@ -66,6 +70,10 @@ class LogParser():
                     self.log.error("Error: key is invalid. Loading old log stopped.")
                     break
                 self.read_log_line(line, False)
+            # After loading old log, always default to FPS on the label
+            self.active_ship["current"] = "FPS"
+            self.active_ship_id = "N/A"
+            self.gui.update_vehicle_status("FPS")
         except Exception as e:
             self.log.error(f"Error reading old log file: {e.__class__.__name__} {e}")
         
@@ -105,29 +113,54 @@ class LogParser():
                 self.log.error(f"Error reading game log file: {e.__class__.__name__} {e}")
         self.log.info("Game log monitoring has stopped.")
 
-    def read_log_line(self, line:str, upload_kills:bool) -> None:
-        """Event checking logic. Look for substrings, do stuff based on what we find."""
-        if -1 != line.find("<Context Establisher Done>"):
+    def _extract_ship_info(self, line):
+        match = re.search(r"for '([\w]+(?:_[\w]+)+)_(\d+)'", line)
+        if match:
+            ship_type = match.group(1)
+            ship_id = match.group(2)
+            return {"ship_type": ship_type, "ship_id": ship_id}
+        return None
+
+    def read_log_line(self, line: str, upload_kills: bool) -> None:
+        if upload_kills and "<Vehicle Control Flow>" in line:
+                if (
+                    ("CVehicleMovementBase::SetDriver:" in line and "requesting control token for" in line) or
+                    ("CVehicle::Initialize::<lambda_1>::operator ():" in line and "granted control token for" in line)
+                ):
+                    ship_data = self._extract_ship_info(line)
+                    if ship_data:
+                        self.active_ship["current"] = ship_data["ship_type"]
+                        self.active_ship_id = ship_data["ship_id"]
+                        self.log.info(f"Entered ship: {self.active_ship['current']} (ID: {self.active_ship_id})")
+                        self.gui.update_vehicle_status(self.active_ship["current"])
+                    return
+                if (
+                    ("CVehicleMovementBase::ClearDriver:" in line and "releasing control token for" in line) or
+                    ("losing control token for" in line)
+                ):
+                    self.active_ship["current"] = "FPS"
+                    self.active_ship_id = "N/A"
+                    self.log.info("Exited ship: Defaulted to FPS (on-foot)")
+                    self.gui.update_vehicle_status("FPS")
+                    return
+                
+        if "<Context Establisher Done>" in line:
             self.set_game_mode(line)
             self.log.debug(f"read_log_line(): set_game_mode with: {line}.")
-        elif -1 != line.find("CPlayerShipRespawnManager::OnVehicleSpawned") and (
-                "SC_Default" != self.game_mode) and (-1 != line.find(self.player_geid["current"])):
+        elif "CPlayerShipRespawnManager::OnVehicleSpawned" in line and (
+                "SC_Default" != self.game_mode) and (self.player_geid["current"] in line):
             self.set_ac_ship(line)
             self.log.debug(f"read_log_line(): set_ac_ship with: {line}.")
-        elif ((-1 != line.find("<Vehicle Destruction>")) or (
-                -1 != line.find("<local client>: Entering control state dead"))) and (
-                -1 != line.find(self.active_ship_id)):
-                # Send ship destroy event to the server via heartbeat
-                self.log.debug(f"read_log_line(): destroy_player_zone with: {line}")
-                self.destroy_player_zone()
-        elif -1 != line.find(self.rsi_handle["current"]):
-            # NOTE: OnEntityEnterZone not current in logs
-            if -1 != line.find("OnEntityEnterZone"):
-                # Send change ship event to the server via heartbeat
+        elif ("<Vehicle Destruction>" in line or
+            "<local client>: Entering control state dead" in line) and (
+                self.active_ship_id in line):
+            self.log.debug(f"read_log_line(): destroy_player_zone with: {line}")
+            self.destroy_player_zone()
+        elif self.rsi_handle["current"] in line:
+            if "OnEntityEnterZone" in line:
                 self.log.debug(f"read_log_line(): set_player_zone with: {line}.")
                 self.set_player_zone(line, False)
-            if -1 != line.find("CActor::Kill") and not self.check_ignored_victims(line) and upload_kills:
-                # Parse the kill log
+            if "CActor::Kill" in line and not self.check_ignored_victims(line) and upload_kills:
                 kill_result = self.parse_kill_line(line, self.rsi_handle["current"])
                 self.log.debug(f"read_log_line(): kill_result with: {line}.")
                 # Do not send
@@ -163,7 +196,7 @@ class LogParser():
                     self.update_kd_ratio()
                 else:
                     self.log.error(f"Kill failed to parse: {line}")
-        elif -1 != line.find("<Jump Drive State Changed>"):
+        elif "<Jump Drive State Changed>" in line:
             self.log.debug(f"read_log_line(): set_player_zone with: {line}.")
             self.set_player_zone(line, True)
 
@@ -173,22 +206,22 @@ class LogParser():
         curr_game_mode = split_line[8].split("=")[1].strip("\"")
         if self.game_mode != curr_game_mode:
             self.game_mode = curr_game_mode
-
         if "SC_Default" == curr_game_mode:
-            self.active_ship["current"] = "N/A"
+            self.active_ship["current"] = "FPS"
             self.active_ship_id = "N/A"
+            self.gui.update_vehicle_status("FPS")
 
     def set_ac_ship(self, line:str) -> None:
         """Parse log for current active ship."""
         self.active_ship["current"] = line.split(' ')[5][1:-1]
         self.log.debug(f"Player has entered ship: {self.active_ship['current']}")
-    
+        self.gui.update_vehicle_status(self.active_ship["current"])
+
     def destroy_player_zone(self) -> None:
-        """Remove current active ship zone."""
-        if ("N/A" != self.active_ship["current"]) or ("N/A" != self.active_ship_id):
-            self.log.debug(f"Ship Destroyed: {self.active_ship['current']} with ID: {self.active_ship_id}")
-            self.active_ship["current"] = "N/A"
-            self.active_ship_id = "N/A"
+        self.log.debug(f"Ship Destroyed: {self.active_ship['current']} with ID: {self.active_ship_id}")
+        self.active_ship["current"] = "FPS"
+        self.active_ship_id = "N/A"
+        self.gui.update_vehicle_status("FPS")
 
     def set_player_zone(self, line: str, use_jd) -> None:
         """Set current active ship zone."""
@@ -198,7 +231,8 @@ class LogParser():
             line_index = line.index("adam: ") + len("adam: ")
         if 0 == line_index:
             self.log.debug(f"Active Zone Change: {self.active_ship['current']}")
-            self.active_ship["current"] = "N/A"
+            self.active_ship["current"] = "FPS"
+            self.gui.update_vehicle_status("FPS")
             return
         if not use_jd:
             potential_zone = line[line_index:].split(' ')[0]
@@ -211,8 +245,9 @@ class LogParser():
                 self.active_ship_id = potential_zone[potential_zone.rindex('_') + 1:]
                 self.log.debug(f"Active Zone Change: {self.active_ship['current']} with ID: {self.active_ship_id}")
                 self.cm.post_heartbeat_event(None, None, self.active_ship["current"])
+                self.gui.update_vehicle_status(self.active_ship["current"])
                 return
-
+      
     def check_ignored_victims(self, line) -> bool:
         """Check if any ignored victims are present in the given line."""
         for data in self.api.sc_data["ignoredVictimRules"]:
