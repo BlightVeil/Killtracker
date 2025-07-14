@@ -6,6 +6,7 @@ import pytz
 from tzlocal import get_localzone
 from packaging import version
 from time import sleep
+import itertools
 
 class API_Client():
     """API client for the Kill Tracker."""
@@ -20,7 +21,7 @@ class API_Client():
         self.api_key = {"value": None}
         self.api_key_filename = "killtracker_key.cfg"
         self.api_fqdn = "http://drawmyoshi.com:25966"
-        self.sc_data = {}
+        self.sc_data = {"weapons": [], "ships": [], "ignoredVictimRules": []}
         self.expiration_time = None
         self.countdown_active = False
         self.countdown_interval = 60
@@ -261,8 +262,8 @@ class API_Client():
                         self.log.debug("Pulling SC data mappings from Servitor.")
                         self.get_data_map("weapons")
                         sleep(1)
-                        self.get_data_map("ships")
-                        sleep(1)
+                        #self.get_data_map("ships") # NOT NEEDED ATM
+                        #sleep(1)
                         self.get_data_map("ignoredVictimRules")
                         sleep(1)
                     else:
@@ -294,15 +295,17 @@ class API_Client():
                 headers=headers, 
                 timeout=self.request_timeout
             )
-            self.log.debug(f"get_data_map(): Response text: {response.text}")
             if response.status_code == 200:
                 self.log.debug(f'{data_type} data has been downloaded from Servitor.')
                 # Merge incoming SC data into new dict
-                if data_type not in self.sc_data or self.sc_data[data_type] != response.json():
-                    self.log.debug(f"get_data_map(): Local SC data for the Kill Tracker differs from Servitor data. Updating local data for {data_type}")
-                    self.sc_data = self.sc_data | response.json()
+                server_data = response.json()[data_type]
+                diff = list(itertools.filterfalse(lambda x: x in self.sc_data[data_type], server_data)) + list(itertools.filterfalse(lambda x: x in server_data, self.sc_data[data_type]))
+                if len(diff) > 0:
+                    self.log.info(f"get_data_map(): Local SC data for the Kill Tracker differs from Servitor data. Updating local data for {data_type}")
+                    self.log.debug(f'get_data_map(): Diff for {data_type} data: {diff}')
+                    self.sc_data[data_type] = server_data
                 else:
-                    self.log.debug(f"get_data_map(): Local SC data for {data_type} in the Kill Tracker is the same as on Servitor.")
+                    self.log.debug(f"get_data_map(): Local SC data for {data_type} is the same as Servitor.")
             else:
                 self.log.error(f"{response.status_code} Error when pulling data for {data_type}.")
         except requests.exceptions.RequestException as e:

@@ -142,7 +142,7 @@ class LogParser():
                     self.gui.session_deaths_label.config(text=f"Total Session Deaths: {self.death_total}", fg="red")
                     self.log.info("You have fallen in the service of BlightVeil.")
                     if kill_result["result"] == "killed":
-                        self.log.info(f'You were killed by {kill_result["data"]["killer"]} with {kill_result["data"]["weapon"]}')
+                        self.log.info(f'You were killed by {kill_result["data"]["killer"]} with {kill_result["data"]["weapon"]}.')
                     # Send death-event to the server via heartbeat
                     self.cm.post_heartbeat_event(kill_result["data"]["victim"], kill_result["data"]["zone"], None)
                     self.destroy_player_zone()
@@ -245,7 +245,7 @@ class LogParser():
         """Get the human readable string from the parsed log value."""
         try:
             for data in self.api.sc_data[data_type]:
-                if data["id"] == data_id:
+                if data["id"] in data_id:
                     self.log.debug(f"Found the human readable string: {data['name']} of the raw log string: {data_id}")
                     return data["name"]
             self.log.warning(f"Did not find the human readable version of the raw log string: {data_id}")
@@ -340,8 +340,9 @@ class LogParser():
             if -1 != line.find(acct_kw):
                 return line.split(' ')[11]
                 
-    def update_kd_ratio(self):
-        print(f"DEBUG: Kills={self.kill_total}, Deaths={self.death_total}")
+    def update_kd_ratio(self) -> None:
+        """Update KDR."""
+        self.log.debug(f"update_kd_ratio(): Kills={self.kill_total}, Deaths={self.death_total}")
         if self.kill_total == 0 and self.death_total == 0:
             kd_display = "--"
         elif self.death_total == 0:
@@ -349,20 +350,19 @@ class LogParser():
         else:
             kd = self.kill_total / self.death_total
             kd_display = f"{kd:.2f}"
-
         # Update the KD label in the GUI
         if hasattr(self.gui, 'kd_ratio_label'):
             self.gui.kd_ratio_label.config(text=f"KD Ratio: {kd_display}", fg="#00FFFF")
 
-    # When user dies:
-    def handle_player_death(self):
+    def handle_player_death(self) -> None:
+        """Handle KDR when user dies."""
         self.curr_killstreak = 0
         self.death_total += 1
         # ... other updates ...
         self.update_kd_ratio()
 
-    # When user gets a kill:
-    def handle_player_kill(self):
+    def handle_player_kill(self) -> None:
+        """Handle KDR when user gets a kill."""
         self.curr_killstreak += 1
         if self.curr_killstreak > self.max_killstreak:
             self.max_killstreak = self.curr_killstreak

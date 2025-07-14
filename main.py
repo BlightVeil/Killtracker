@@ -25,6 +25,7 @@ class KillTracker():
         self.monitoring = {"active": False}
         self.heartbeat_status = {"active": False}
         self.anonymize_state = {"enabled": False}
+        self.mute_state = {"enabled": False}
         self.rsi_handle = {"current": "N/A"}
         self.player_geid = {"current": "N/A"}
         self.active_ship = {"current": "N/A"}
@@ -144,13 +145,16 @@ def main():
 
     try:
         gui_module = GUI(
-            kt.local_version, kt.anonymize_state
+            kt.local_version, kt.anonymize_state, kt.mute_state
         )        
     except Exception as e:
         print(f"main(): ERROR in creating the GUI module: {e.__class__.__name__} {e}")
 
     try:
-        sound_module = Sounds()          # Create Sounds instance first
+        sound_module = Sounds(
+            kt.mute_state
+        )          
+        # Create Sounds instance first
         sound_module.log = gui_module.log  # Assign logger immediately
     except Exception as e:
         print(f"main(): ERROR in setting up the Sounds module: {e.__class__.__name__} {e}")
@@ -160,9 +164,10 @@ def main():
     except Exception as e:
         print(f"main(): ERROR linking Sounds to GUI: {e.__class__.__name__} {e}")
     try:
-        sound_module.setup_sounds()     # Setup sounds only after log is assigned
+        sound_module.setup_sounds() # Setup sounds only after log is assigned
     except Exception as e:
         print(f"main(): ERROR in setting up the sounds module: {e.__class__.__name__} {e}")
+
     try:
         api_client_module = API_Client(
             gui_module, kt.monitoring, kt.local_version, kt.rsi_handle

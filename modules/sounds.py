@@ -4,25 +4,39 @@ from os import listdir, path
 from pathlib import Path
 import shutil
 import pygame
-pygame.mixer.init()
 
 # Import kill tracker modules
 import modules.helpers as Helpers
 
 class Sounds():
     """Sounds module for the Kill Tracker."""
-    def __init__(self):
+    def __init__(self, mute_state):
         self.log = None
+        self.mute_state = mute_state
+        pygame.mixer.init()
         self.sounds_pyinst_dir = None
         self.sounds_live_dir = None
-        self.volume = 0.5  # Default volume (0.0 to 1.0)
+        self.curr_volume = 0.5  # Default volume (0.0 to 1.0)
+        self.prev_volume = 0.5
 
-    def set_volume(self, volume):
+    def set_volume(self, volume:float) -> None:
         """Set the playback volume."""
-        self.volume = volume
-        pygame.mixer.music.set_volume(self.volume)
-        if self.log:
-            self.log.info(f"Sound volume set to {self.volume * 100:.0f}%")
+        if volume != -1.0:
+            # Handle flags, not volume
+            self.curr_volume = volume
+            self.prev_volume = volume
+        if self.mute_state["enabled"]:
+            self.curr_volume = 0.0
+            if self.log:
+                self.log.warning(f"Sound volume muted.")
+        else:
+            if self.log and self.curr_volume != self.prev_volume:
+                self.log.warning(f"Sound volume unmuted.")
+            self.curr_volume = self.prev_volume
+
+        pygame.mixer.music.set_volume(self.curr_volume)
+        if self.log and not self.mute_state["enabled"]:
+            self.log.debug(f"Sound volume set to {self.curr_volume * 100:.0f}%")
 
     def setup_sounds(self) -> None:
         """Setup the sounds module."""
@@ -54,7 +68,7 @@ class Sounds():
             if self.log:
                 self.log.error(f"create_sounds_dir(): Error: {e.__class__.__name__} {e}")
 
-    def copy_sounds(self, source, target) -> None:
+    def copy_sounds(self, source:Path, target:Path) -> None:
         """Copy new sound files from one folder to another."""
         try:
             if not source.exists():
@@ -78,7 +92,7 @@ class Sounds():
             if self.log:
                 self.log.error(f"Error copying sounds: {e.__class__.__name__} {e}")
 
-    def play_random_sound(self):
+    def play_random_sound(self) -> None:
         """Play a random sound from the sounds folder."""
         sounds = list(self.sounds_live_dir.glob('**/*.wav')) if self.sounds_live_dir else []
         if sounds:
@@ -87,7 +101,7 @@ class Sounds():
                 if self.log:
                     self.log.debug(f"Playing sound: {sound_to_play.name}")
                 sound = pygame.mixer.Sound(str(sound_to_play))
-                sound.set_volume(self.volume)
+                sound.set_volume(self.curr_volume)
                 sound.play()
                 sleep(sound.get_length())
             except Exception as e:
