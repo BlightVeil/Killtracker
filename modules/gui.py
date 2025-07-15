@@ -61,6 +61,7 @@ class GUI():
         self.mute_state = mute_state
         self.app = None
         self.log = None
+        self.sounds = None
         self.api = None
         self.cm = None
         self.key_entry = None

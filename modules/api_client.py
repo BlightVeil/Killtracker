@@ -129,7 +129,7 @@ class API_Client():
             if self.rsi_handle["current"] != "N/A":
                 if self.validate_api_key(entered_key):
                     self.cfg_handler.save_cfg("key", entered_key)
-                    self.api.api_key["value"] = entered_key
+                    self.api_key["value"] = entered_key
                     self.log.success("Key activated and saved. Servitor connection established.")
                     self.gui.api_status_label.config(text="Key Status: Valid", fg=self.key_status_valid_color)
                     if not self.countdown_active:
@@ -212,6 +212,7 @@ class API_Client():
                 if post_key_exp_result == "error":
                     self.log.warning("Failed to get the key expiration time. Continuing anyway ...")
                 elif post_key_exp_result == "invalidated":
+                    self.cfg_handler.save_cfg("key", "")
                     self.log.error("Key has been invalidated by Servitor. Please get a new key or speak with a BlightVeil admin.")
                     stop_countdown()
                     continue # Skip further calculations if invalidated
@@ -224,6 +225,7 @@ class API_Client():
                     # Check if the key has expired
                     if now > expiration_time:
                         self.log.error(f"Key expired. Please enter a new Kill Tracker key.")
+                        self.cfg_handler.save_cfg("key", "")
                         stop_countdown()
                         continue # Skip further calculations if expired
 
@@ -251,6 +253,7 @@ class API_Client():
                         else:
                             countdown_text = f"Key Status: Valid (Expires in {minutes} minutes {seconds} seconds)"
                         self.gui.api_status_label.config(text=countdown_text, fg=self.key_status_valid_color)
+                        self.cfg_handler.save_cfg("key", self.api_key["value"])
                         # Update local SC data
                         self.log.debug("Pulling SC data mappings from Servitor.")
                         self.get_data_map("weapons")
@@ -261,6 +264,7 @@ class API_Client():
                         sleep(1)
                     else:
                         self.log.error(f"Key expired. Please enter a new Kill Tracker key.")
+                        self.cfg_handler.save_cfg("key", "")
                         stop_countdown()
             except Exception as e:
                 self.log.error(f"General error in key expiration countdown: {e.__class__.__name__} {e}")
