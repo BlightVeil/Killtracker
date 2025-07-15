@@ -10,8 +10,9 @@ import modules.helpers as Helpers
 
 class Sounds():
     """Sounds module for the Kill Tracker."""
-    def __init__(self, mute_state):
+    def __init__(self, cfg_handler, mute_state):
         self.log = None
+        self.cfg_handler = cfg_handler
         self.mute_state = mute_state
         pygame.mixer.init()
         self.sounds_pyinst_dir = None
@@ -35,6 +36,11 @@ class Sounds():
             self.curr_volume = self.prev_volume
 
         pygame.mixer.music.set_volume(self.curr_volume)
+        # Handle config
+        cfg_volume = {"level": self.curr_volume, "is_muted": self.mute_state["enabled"]}
+        self.cfg_handler.save_cfg("volume", cfg_volume)
+        sleep(1)
+
         if self.log and not self.mute_state["enabled"]:
             self.log.debug(f"Sound volume set to {self.curr_volume * 100:.0f}%")
 

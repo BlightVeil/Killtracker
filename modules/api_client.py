@@ -10,20 +10,22 @@ import itertools
 
 class API_Client():
     """API client for the Kill Tracker."""
-    def __init__(self, gui, monitoring, local_version, rsi_handle):
+    def __init__(self, cfg_handler, gui, monitoring, local_version, rsi_handle):
         self.log = None
         self.cm = None
+        self.cfg_handler = cfg_handler
         self.gui = gui
+        self.cfg_handler = cfg_handler
         self.monitoring = monitoring
         self.local_version = local_version
         self.rsi_handle = rsi_handle
         self.request_timeout = 12
         self.api_key = {"value": None}
-        self.api_key_filename = "killtracker_key.cfg"
         self.api_fqdn = "http://drawmyoshi.com:25966"
         self.sc_data = {"weapons": [], "ships": [], "ignoredVictimRules": []}
         self.expiration_time = None
         self.countdown_active = False
+        self.connection_healthy = False
         self.countdown_interval = 60
         self.key_status_valid_color = "#04B431"
         self.key_status_invalid_color = "red"
@@ -96,31 +98,16 @@ class API_Client():
             self.log.debug(f"validate_api_key(): Response text: {response.text}")
             if response.status_code != 200:
                 self.log.error(f"Error in validating the key: code {response.status_code}")
+                self.connection_healthy = False
                 return False
+            self.connection_healthy = True
             return True
         except requests.RequestException as e:
             self.log.error(f"validate_api_key(): Request Error: {e.__class__.__name__} {e}")
-            return False
         except Exception as e:
             self.log.error(f"validate_api_key(): General Error: {e.__class__.__name__} {e}")
-            return False
-        
-    def load_api_key(self) -> None:
-        """Load the API key."""
-        with open(self.api_key_filename, "r") as f:
-            entered_key = f.readline().strip()
-        if entered_key:
-            self.log.success(f"Saved key loaded: {entered_key}. Attempting to establish Servitor connection...")
-        else:
-            self.log.error("No saved key found in file. Please get a new key from the key generator.")
-            self.gui.api_status_label.config(text="Key Status: Invalid", fg=self.key_status_invalid_color)
-        return entered_key
-    
-    def save_api_key(self, key:str) -> None:
-        """Save the API key."""
-        with open(self.api_key_filename, "w") as f:
-            f.write(key)
-        self.api_key["value"] = key
+        self.connection_healthy = False
+        return False
 
     def load_activate_key(self) -> None:
         """Activate and load the API key."""
@@ -130,7 +117,9 @@ class API_Client():
             self.log.error(f"load_activate_key(): Error parsing key: {e.__class__.__name__} {e}")
         try:
             if not entered_key:
-                entered_key = self.load_api_key()
+                entered_key = self.cfg_handler.load_cfg("key")
+            if entered_key == "error":
+                self.gui.api_status_label.config(text="Key Status: Invalid", fg=self.key_status_invalid_color)
         except FileNotFoundError:
             self.log.error("No saved key found. Please enter a valid key.")
             self.gui.api_status_label.config(text="Key Status: Invalid", fg=self.key_status_invalid_color)  # Access api_status_label in GUI here
@@ -139,7 +128,8 @@ class API_Client():
             # Proceed with activation
             if self.rsi_handle["current"] != "N/A":
                 if self.validate_api_key(entered_key):
-                    self.save_api_key(entered_key)  # Save the key for future use
+                    self.cfg_handler.save_cfg("key", entered_key)
+                    self.api.api_key["value"] = entered_key
                     self.log.success("Key activated and saved. Servitor connection established.")
                     self.gui.api_status_label.config(text="Key Status: Valid", fg=self.key_status_valid_color)
                     if not self.countdown_active:
@@ -176,6 +166,7 @@ class API_Client():
             )
             self.log.debug(f"post_api_key_expiration_time(): Response text: {response.text}")
             if response.status_code == 200:
+                self.connection_healthy = True
                 response_data = response.json()
                 post_key_exp_result = response_data.get("expires_at")
                 if post_key_exp_result:
@@ -183,6 +174,7 @@ class API_Client():
                 else:
                     self.log.error("Error: Key expiration time not sent in Servitor response.")
             elif response.status_code == 403:
+                self.connection_healthy = False
                 return "invalidated"
             else:
                 self.log.error(f"Error in posting key expiration time: code {response.status_code}")
@@ -193,6 +185,7 @@ class API_Client():
         except Exception as e:
             self.log.error(f"post_api_key_expiration_time(): Error: {e.__class__.__name__} {e}")
         # Fallback
+        self.connection_healthy = False
         return "error"
 
     def start_api_key_countdown(self) -> None:
@@ -296,6 +289,7 @@ class API_Client():
                 timeout=self.request_timeout
             )
             if response.status_code == 200:
+                self.connection_healthy = True
                 self.log.debug(f'{data_type} data has been downloaded from Servitor.')
                 # Merge incoming SC data into new dict
                 server_data = response.json()[data_type]
@@ -308,12 +302,15 @@ class API_Client():
                     self.log.debug(f"get_data_map(): Local SC data for {data_type} is the same as Servitor.")
             else:
                 self.log.error(f"{response.status_code} Error when pulling data for {data_type}.")
+                self.connection_healthy = False
         except requests.exceptions.RequestException as e:
             self.log.error(f"HTTP Error when pulling data for {data_type}: {e}")
+            self.connection_healthy = False
         except Exception as e:
             self.log.error(f"get_data_map(): Error: {e.__class__.__name__} {e}")
+            self.connection_healthy = False
 
-    def post_kill_event(self, kill_result:dict) -> None:
+    def post_kill_event(self, kill_result:dict) -> bool:
         """Post the kill parsed from the log."""
         try:
             if not self.api_key["value"]:
@@ -334,13 +331,20 @@ class API_Client():
             )
             self.log.debug(f"post_kill_event(): Response text: {response.text}")
             if response.status_code == 200:
+                self.connection_healthy = True
                 self.log.success(f'Your kill of {kill_result["data"]["victim"]} has been posted to Servitor!')
+                return True
             else:
                 self.log.error(f"Error when posting kill: code {response.status_code}")
-                self.log.error(f"Error: kill event {kill_result} will not be sent!")
         except requests.exceptions.RequestException as e:
             self.gui.async_loading_animation()
             self.log.error(f"HTTP Error sending kill event: {e}")
-            self.log.error(f"Error: kill event {kill_result} will not be sent!")
         except Exception as e:
             self.log.error(f"post_kill_event(): Error: {e.__class__.__name__} {e}")
+        # Failure state
+        self.log.error(f"Error: kill event {kill_result} will not be sent!")
+        self.connection_healthy = False
+        if kill_result not in self.cfg_handler.cfg_dict["pickle"]:
+            self.cfg_handler.cfg_dict["pickle"].append(kill_result)
+            self.log.warning(f'Connection seems to be unhealthy. Pickling kill.')
+        return False
