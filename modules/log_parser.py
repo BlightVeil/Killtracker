@@ -180,6 +180,9 @@ class LogParser():
                     self.cm.post_heartbeat_event(kill_result["data"]["victim"], kill_result["data"]["zone"], None)
                     self.destroy_player_zone()
                     self.update_kd_ratio()
+                    if kill_result["result"] == "killed" and self.game_mode == "EA_FreeFlight":
+                        death_result = self.parse_death_line(line, self.rsi_handle["current"])
+                        self.api.post_kill_event(death_result, "reportACKill")
                 # Log a message for the current user's kill
                 elif kill_result["result"] == "killer":
                     self.curr_killstreak += 1
@@ -192,7 +195,7 @@ class LogParser():
                     self.log.success(f"You have killed {kill_result['data']['victim']},")
                     self.log.info(f"and brought glory to BlightVeil.")
                     self.sounds.play_random_sound()
-                    self.api.post_kill_event(kill_result)
+                    self.api.post_kill_event(kill_result, "reportKill")
                     self.update_kd_ratio()
                 else:
                     self.log.error(f"Kill failed to parse: {line}")
@@ -347,7 +350,33 @@ class LogParser():
         except Exception as e:
             self.log.error(f"parse_kill_line(): Error: {e.__class__.__name__} {e}")
             return {"result": "", "data": None}
-        
+
+    def parse_death_line(self, line:str, curr_user:str):
+        """Parse death event."""
+        try:
+            death_result = {"result": "", "data": {}}
+
+            if not self.check_exclusion_scenarios(line):
+                death_result["result"] = "exclusion"
+                return death_result
+
+            split_line = line.split(' ')
+
+            kill_time = split_line[0].strip('\'')
+            killer = split_line[12].strip('\'')
+
+            death_result["result"] = "killed"
+            death_result["data"] = {
+                'time': kill_time,
+                'player': killer,
+                'victim': curr_user,
+                'game_mode': self.game_mode,
+            }
+            return death_result
+        except Exception as e:
+            self.log.error(f"parse_kill_line(): Error: {e.__class__.__name__} {e}")
+            return {"result": "", "data": None}
+
     def find_rsi_handle(self) -> str:
         """Get the current user's RSI handle."""
         acct_str = "<Legacy login response> [CIG-net] User Login Success"

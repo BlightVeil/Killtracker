@@ -313,14 +313,14 @@ class API_Client():
         except Exception as e:
             self.log.error(f"get_data_map(): Error: {e.__class__.__name__} {e}")
 
-    def post_kill_event(self, kill_result:dict) -> None:
+    def post_kill_event(self, kill_result: dict, endpoint: str) -> None:
         """Post the kill parsed from the log."""
         try:
             if not self.api_key["value"]:
                 self.log.error("Error: kill event will not be sent because the key does not exist. Please enter a valid Kill Tracker key to establish connection with Servitor...")
                 return
             
-            url = f"{self.api_fqdn}/reportKill"
+            url = f"{self.api_fqdn}/{endpoint}"
             headers = {
                 'content-type': 'application/json',
                 'Authorization': self.api_key["value"] if self.api_key["value"] else ""
@@ -334,7 +334,7 @@ class API_Client():
             )
             self.log.debug(f"post_kill_event(): Response text: {response.text}")
             if response.status_code == 200:
-                self.log.success(f'Your kill of {kill_result["data"]["victim"]} has been posted to Servitor!')
+                self.log.success(f'Kill of {kill_result["data"]["victim"]} by {kill_result["data"]["player"]} has been posted to Servitor!')
             else:
                 self.log.error(f"Error when posting kill: code {response.status_code}")
                 self.log.error(f"Error: kill event {kill_result} will not be sent!")
