@@ -21,7 +21,7 @@ class API_Client():
         self.rsi_handle = rsi_handle
         self.request_timeout = 12
         self.api_key = {"value": None}
-        self.api_fqdn = "http://drawmyoshi.com:25966"
+        self.api_fqdn = "http://blightveil.org:25966"
         self.sc_data = {"weapons": [], "ships": [], "ignoredVictimRules": []}
         self.expiration_time = None
         self.countdown_active = False
