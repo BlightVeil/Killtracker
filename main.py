@@ -9,6 +9,7 @@ import warnings
 warnings.filterwarnings("ignore", message="Couldn't find ffmpeg or avconv")
 
 # Import kill tracker modules
+from modules.cfg_handler import Cfg_Handler
 from modules.api_client import API_Client
 from modules.gui import GUI
 from modules.log_parser import LogParser
@@ -18,7 +19,7 @@ from modules.commander_mode.cm_core import CM_Core
 class KillTracker():
     """Official Kill Tracker for BlightVeil."""
     def __init__(self):
-        self.local_version = "1.5"
+        self.local_version = "1.6"
         self.log = None
         self.log_parser = None
         #self.stop_event = Event()
@@ -144,6 +145,11 @@ def main():
         print(f"main(): ERROR in creating the KillTracker instance: {e.__class__.__name__} {e}")
 
     try:
+        cfg_module = Cfg_Handler()
+    except Exception as e:
+        print(f"main(): ERROR in creating the Config Handler module: {e.__class__.__name__} {e}")
+
+    try:
         gui_module = GUI(
             kt.local_version, kt.anonymize_state, kt.mute_state
         )        
@@ -152,28 +158,29 @@ def main():
 
     try:
         sound_module = Sounds(
-            kt.mute_state
+            cfg_module, kt.mute_state
         )          
-        # Create Sounds instance first
-        sound_module.log = gui_module.log  # Assign logger immediately
     except Exception as e:
         print(f"main(): ERROR in setting up the Sounds module: {e.__class__.__name__} {e}")
-    # Link Sounds to GUI here
+
+    # Link Sounds to GUI here (to resolve circular dependency)
     try:
         gui_module.sounds = sound_module
     except Exception as e:
         print(f"main(): ERROR linking Sounds to GUI: {e.__class__.__name__} {e}")
-    try:
-        sound_module.setup_sounds() # Setup sounds only after log is assigned
-    except Exception as e:
-        print(f"main(): ERROR in setting up the sounds module: {e.__class__.__name__} {e}")
 
     try:
         api_client_module = API_Client(
-            gui_module, kt.monitoring, kt.local_version, kt.rsi_handle
+            cfg_module, gui_module, kt.monitoring, kt.local_version, kt.rsi_handle
         )
     except Exception as e:
         print(f"main(): ERROR in setting up the API Client module: {e.__class__.__name__} {e}")
+
+    # Link API to Cfg Handler here (to resolve circular dependency)
+    try:
+        cfg_module.api = api_client_module
+    except Exception as e:
+        print(f"main(): ERROR linking API to Cfg Handler: {e.__class__.__name__} {e}")
 
     try:
         cm_module = CM_Core(
@@ -211,6 +218,7 @@ def main():
             kt.log_parser = log_parser_module
             # Add logger ref to classes
             kt.log = gui_module.log
+            cfg_module.log = gui_module.log
             api_client_module.log = gui_module.log
             sound_module.log = gui_module.log
             cm_module.log = gui_module.log
@@ -222,6 +230,12 @@ def main():
             sound_module.setup_sounds()
         except Exception as e:
             print(f"main(): ERROR in setting up the sounds module: {e.__class__.__name__} {e}")
+        
+        try:
+            # Kill Tracker log pickler
+            monitor_thr = Thread(target=cfg_module.log_pickler, daemon=True).start()
+        except Exception as e:
+            print(f"main(): ERROR starting log pickler: {e.__class__.__name__} {e}")
 
         try:
             # Kill Tracker monitor loop
