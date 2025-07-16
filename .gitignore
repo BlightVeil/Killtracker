@@ -4,5 +4,6 @@ modules/__pycache__
 modules/commander_mode/__pycache__
 build/
 dist/
+static/sounds
 *.spec
 *.cfg
