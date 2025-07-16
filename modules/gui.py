@@ -55,7 +55,8 @@ class AppLogger():
 
 class GUI():
     """GUI for the Kill Tracker."""
-    def __init__(self, local_version, anonymize_state, mute_state):
+    def __init__(self, cfg_handler, local_version, anonymize_state, mute_state):
+        self.cfg_handler = cfg_handler
         self.local_version = local_version
         self.anonymize_state = anonymize_state
         self.mute_state = mute_state
@@ -70,6 +71,7 @@ class GUI():
         self.max_killstreak_label = None
         self.session_kills_label = None
         self.commander_mode_button = None
+        self.init_run = True
 
     def setup_app_log_display(self):
         """Setup app logging in a text display area."""
@@ -115,10 +117,14 @@ class GUI():
 
     def handle_volume(self, volume):
         """Handle volume."""
-        # Unmute volume if slider is changed
-        self.mute_state["enabled"] = False
-        self.mute_button.config(text="🔊", fg="#ffffff", bg="#484759")
-        self.sounds.set_volume(volume)
+        if self.init_run:
+            # Hack to avoid overriding initial volume setting loading from cfg
+            self.init_run = False
+        else:
+            # Unmute volume if slider is changed
+            self.mute_state["enabled"] = False
+            self.mute_button.config(text="🔊", fg="#ffffff", bg="#484759")
+            self.sounds.set_volume(volume)
 
     def async_loading_animation(self) -> None:
         def animate():
@@ -248,9 +254,14 @@ class GUI():
         )
         self.debug_button.pack(side=tk.LEFT, padx=(5, 0), pady=(5, 5))
 
-        self.mute_button = self.create_button(
-            options_frame, text="🔊", font=("Times New Roman", 14), command=self.toggle_mute, fg="#ffffff", bg="#484759", height=0, width=3
-        )
+        if self.mute_state["enabled"]:
+            self.mute_button = self.create_button(
+                options_frame, text="🔇", font=("Times New Roman", 14), command=self.toggle_mute, fg="#ffffff", bg="#8A0000", height=0, width=3
+            )
+        else:
+            self.mute_button = self.create_button(
+                options_frame, text="🔊", font=("Times New Roman", 14), command=self.toggle_mute, fg="#ffffff", bg="#484759", height=0, width=3
+            )
         self.mute_button.pack(side=tk.LEFT, padx=(50, 0))
 
         volume_slider = tk.Scale(
@@ -265,7 +276,7 @@ class GUI():
             highlightbackground="#484759",
             command=lambda val: self.handle_volume(int(val) / 100)
         )
-        volume_slider.set(50)  # Default volume to 50%
+        volume_slider.set(self.cfg_handler.cfg_dict["volume"]["level"] * 100)  # Default volume to 50%
         volume_slider.pack(side=tk.LEFT, padx=(5, 0), pady=(0, 15))
         
         # App logger area

@@ -25,9 +25,13 @@ class Sounds():
         """Load sound settings from cfg file."""
         try:
             volume_dict = self.cfg_handler.load_cfg("volume")
-            self.curr_volume = volume_dict["level"]
-            self.prev_volume = volume_dict["level"]
             self.mute_state["enabled"] = volume_dict["is_muted"]
+            self.prev_volume = volume_dict["level"]
+            if self.mute_state["enabled"]:
+                self.curr_volume = 0.0
+                print(f"Sound volume muted.")
+            else:
+                self.curr_volume = volume_dict["level"]
         except Exception as e:
             error_line = f"load_sound_settings(): Error: {e.__class__.__name__} {e}"
             if self.log:
@@ -51,6 +55,9 @@ class Sounds():
                 self.curr_volume = self.prev_volume
 
             pygame.mixer.music.set_volume(self.curr_volume)
+
+            self.cfg_handler.cfg_dict["volume"]["level"] = self.prev_volume
+            self.cfg_handler.cfg_dict["volume"]["is_muted"] = self.mute_state["enabled"]
 
             if not self.mute_state["enabled"]:
                 self.log.debug(f"Sound volume set to {self.curr_volume * 100:.0f}%")

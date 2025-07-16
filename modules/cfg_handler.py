@@ -5,9 +5,10 @@ from pathlib import Path
 
 class Cfg_Handler():
     """Config Handler for the Kill Tracker."""
-    def __init__(self):
+    def __init__(self, program_state):
         self.log = None
         self.api = None
+        self.program_state = program_state
         self.old_cfg_path = Path.cwd() / "killtracker_key.cfg"
         self.cfg_path = Path.cwd() / "bv_killtracker.cfg"
         self.cfg_dict = {"key": "", "volume": {"level": 0.5, "is_muted": False}, "pickle": []}
@@ -70,18 +71,24 @@ class Cfg_Handler():
 
     def log_pickler(self) -> None:
         """Pickle and unpickle kill logs."""
-        while True: # FIXME NEEDS BREAK CONDITION?
+        while self.program_state["enabled"]:
             try:
                 if len(self.cfg_dict["pickle"]) > 0:
                     self.log.debug(f'Current buffer: {self.cfg_dict["pickle"]}.')
                     self.save_cfg("pickle", self.cfg_dict["pickle"])
                     if self.api.connection_healthy:
-                        kill = self.cfg_dict["pickle"][0]
-                        self.log.info(f"Attempting to post a previous kill from the buffer: {kill}.")
-                        uploaded = self.api.post_kill_event(kill)
+                        pickle_payload = self.cfg_dict["pickle"][0]
+                        self.log.info(f'Attempting to post a previous kill from the buffer: {pickle_payload["kill_result"]}')
+                        uploaded = self.api.post_kill_event(pickle_payload["kill_result"], pickle_payload["endpoint"])
                         if uploaded:
                             self.cfg_dict["pickle"].pop(0)
                             self.save_cfg("pickle", self.cfg_dict["pickle"])
             except Exception as e:
                 self.log.error(f"log_pickler(): Error: {e.__class__.__name__} {e}")
-            sleep(5)  # Check every 5 seconds
+            # Check every n seconds
+            for sec in range(60):
+                if not self.program_state["enabled"]:
+                    self.log.info(f"Executing final config save.")
+                    self.save_cfg("pickle", self.cfg_dict["pickle"])
+                    break
+                sleep(1)

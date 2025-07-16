@@ -22,9 +22,9 @@ class KillTracker():
         self.local_version = "1.6"
         self.log = None
         self.log_parser = None
-        #self.stop_event = Event()
         self.monitoring = {"active": False}
         self.heartbeat_status = {"active": False}
+        self.program_state = {"enabled": True}
         self.anonymize_state = {"enabled": False}
         self.mute_state = {"enabled": False}
         self.rsi_handle = {"current": "N/A"}
@@ -105,7 +105,7 @@ class KillTracker():
 
     def monitor_game_state(self) -> None:
         """Continuously monitor the game state and manage log monitoring."""
-        while True: # FIXME NEEDS BREAK CONDITION?
+        while self.program_state["enabled"]:
             try:
                 game_running = self.is_game_running()
 
@@ -145,13 +145,13 @@ def main():
         print(f"main(): ERROR in creating the KillTracker instance: {e.__class__.__name__} {e}")
 
     try:
-        cfg_module = Cfg_Handler()
+        cfg_module = Cfg_Handler(kt.program_state)
     except Exception as e:
         print(f"main(): ERROR in creating the Config Handler module: {e.__class__.__name__} {e}")
 
     try:
         gui_module = GUI(
-            kt.local_version, kt.anonymize_state, kt.mute_state
+            cfg_module, kt.local_version, kt.anonymize_state, kt.mute_state
         )        
     except Exception as e:
         print(f"main(): ERROR in creating the GUI module: {e.__class__.__name__} {e}")
@@ -247,6 +247,8 @@ def main():
     try:
         # GUI main loop
         gui_module.app.mainloop()
+        # Ensure all threads are stopped
+        kt.program_state["enabled"] = False
     except KeyboardInterrupt:
         print("Program interrupted. Exiting gracefully...")
         kt.monitoring["active"] = False

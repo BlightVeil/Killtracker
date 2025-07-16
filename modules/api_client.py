@@ -348,7 +348,8 @@ class API_Client():
         # Failure state
         self.log.error(f"Error: kill event {kill_result} will not be sent!")
         self.connection_healthy = False
-        if kill_result not in self.cfg_handler.cfg_dict["pickle"]:
-            self.cfg_handler.cfg_dict["pickle"].append(kill_result)
+        pickle_payload = {"kill_result": kill_result, "endpoint": endpoint}
+        if pickle_payload not in self.cfg_handler.cfg_dict["pickle"]:
+            self.cfg_handler.cfg_dict["pickle"].append(pickle_payload)
             self.log.warning(f'Connection seems to be unhealthy. Pickling kill.')
         return False
