@@ -145,7 +145,7 @@ def main():
         print(f"main(): ERROR in creating the KillTracker instance: {e.__class__.__name__} {e}")
 
     try:
-        cfg_module = Cfg_Handler(kt.program_state)
+        cfg_module = Cfg_Handler(kt.program_state, kt.rsi_handle["current"])
     except Exception as e:
         print(f"main(): ERROR in creating the Config Handler module: {e.__class__.__name__} {e}")
 

@@ -1,94 +1,102 @@
 import base64
+import hashlib
 import json
 from time import sleep
 from pathlib import Path
 
-class Cfg_Handler():
-    """Config Handler for the Kill Tracker."""
-    def __init__(self, program_state):
+class Cfg_Handler:
+    """Config Handler with simple XOR encryption (built-in only)."""
+
+    def __init__(self, program_state, rsi_handle=None):
         self.log = None
         self.api = None
         self.program_state = program_state
         self.old_cfg_path = Path.cwd() / "killtracker_key.cfg"
         self.cfg_path = Path.cwd() / "bv_killtracker.cfg"
         self.cfg_dict = {"key": "", "volume": {"level": 0.5, "is_muted": False}, "pickle": []}
+        self.rsi_handle = rsi_handle if rsi_handle else "default_handle"
+        self.key = self._derive_key(self.rsi_handle)
 
-    def load_cfg(self, data_type:str) -> str:
-        """Load the Cfg file."""
-        # v1.5 Backwards compatibility
-        if data_type == "key":
-            if self.old_cfg_path.exists():
-                with open(str(self.old_cfg_path), "r") as f:
-                    entered_key = f.readline().strip()
-                    if entered_key:
-                        print(f"Kill Tracker v1.5 saved key loaded: {entered_key}")
-                        self.cfg_dict["key"] = entered_key
-                #self.old_cfg_path.unlink()
-                print(f"Removed old Kill Tracker v1.5 key.")
-                return self.cfg_dict[data_type]
-        
-        if self.cfg_path.exists():
-            with open(str(self.cfg_path), "r") as f:
-                cfg_base64_bytes = f.readline().strip().encode('ascii')
-                cfg_bytes = base64.b64decode(cfg_base64_bytes)
-                cfg_str = cfg_bytes.decode('ascii')
-                self.cfg_dict = json.loads(cfg_str)
+    def _derive_key(self, rsi_handle: str) -> bytes:
+        """Derive a 32-byte key from the RSI handle using SHA256."""
+        return hashlib.sha256(rsi_handle.encode()).digest()
 
-                log_line = f"load_cfg(): cfg: {self.cfg_dict}"
-                if self.log:
-                    self.log.debug(log_line)
-                else:
-                    print(log_line)
-            if self.cfg_dict[data_type]:
-                log_line = f"Saved {data_type} loaded: {self.cfg_dict[data_type]}"
-                if self.log:
-                    self.log.success(log_line)
-                else:
-                    print(log_line)
-            else:
-                log_line = f"No saved {data_type} found in file."
-                if self.log:
-                    self.log.warning(log_line)
-                else:
-                    print(log_line)
+    def _xor_encrypt(self, data: bytes) -> bytes:
+        """Simple XOR encrypt/decrypt with repeating key."""
+        key = self.key
+        return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
+
+    def load_cfg(self, data_type: str) -> str:
+        """Load the config with simple XOR decryption."""
+        if data_type == "key" and self.old_cfg_path.exists():
+            with open(str(self.old_cfg_path), "r") as f:
+                entered_key = f.readline().strip()
+                if entered_key:
+                    print(f"Kill Tracker v1.5 saved key loaded: {entered_key}")
+                    self.cfg_dict["key"] = entered_key
+                    print(f"Removed old Kill Tracker v1.5 key.")
+                    return self.cfg_dict[data_type]
+
+        if not self.cfg_path.exists():
+            return self.cfg_dict.get(data_type, "error")
+
+        try:
+            with open(str(self.cfg_path), "rb") as f:
+                file_data = f.read()
+            try:
+                # Decrypt with XOR and base64 decode
+                decrypted_data = self._xor_encrypt(base64.b64decode(file_data)).decode('utf-8')
+                self.cfg_dict = json.loads(decrypted_data)
+                print(f"load_cfg(): cfg: {self.cfg_dict}")
+                return self.cfg_dict.get(data_type, "error")
+            except Exception as e:
+                print(f"Failed to decrypt config: {e}")
                 return "error"
-        return self.cfg_dict[data_type]
-    
-    def save_cfg(self, data_type:str, data) -> None:
-        """Save the Cfg file."""
+        except Exception as e:
+            print(f"Failed to load config file: {e}")
+            return "error"
+
+    def save_cfg(self, data_type: str, data) -> None:
+        """Encrypt and save the configuration with XOR and base64."""
         try:
             self.cfg_dict[data_type] = data
-            self.log.debug(f"save_cfg(): Saving cfg dict: {self.cfg_dict}")
-            with open(str(self.cfg_path), "w") as f:
-                cfg_str = json.dumps(self.cfg_dict)
-                cfg_bytes = cfg_str.encode('ascii')
-                cfg_base64 = base64.b64encode(cfg_bytes)
-                base64_cfg = cfg_base64.decode('ascii')
-                f.write(base64_cfg)
-                self.log.debug(f"Successfully saved config to {str(self.cfg_path)}.")
-        except FileNotFoundError as e:
-            self.log.error(f"Was not able to save the config to {str(self.cfg_path)} - {e}.")
+            cfg_json = json.dumps(self.cfg_dict)
+            encrypted_data = base64.b64encode(self._xor_encrypt(cfg_json.encode('utf-8')))
+            with open(str(self.cfg_path), "wb") as f:
+                f.write(encrypted_data)
+            if self.log:
+                self.log.debug(f"Successfully saved encrypted config to {str(self.cfg_path)}.")
+        except Exception as e:
+            if self.log:
+                self.log.error(f"Was not able to save the config to {str(self.cfg_path)} - {e}.")
+            else:
+                print(f"Was not able to save the config to {str(self.cfg_path)} - {e}.")
 
     def log_pickler(self) -> None:
         """Pickle and unpickle kill logs."""
         while self.program_state["enabled"]:
             try:
                 if len(self.cfg_dict["pickle"]) > 0:
-                    self.log.debug(f'Current buffer: {self.cfg_dict["pickle"]}.')
+                    if self.log:
+                        self.log.debug(f'Current buffer: {self.cfg_dict["pickle"]}.')
                     self.save_cfg("pickle", self.cfg_dict["pickle"])
-                    if self.api.connection_healthy:
+                    if self.api and getattr(self.api, "connection_healthy", False):
                         pickle_payload = self.cfg_dict["pickle"][0]
-                        self.log.info(f'Attempting to post a previous kill from the buffer: {pickle_payload["kill_result"]}')
+                        if self.log:
+                            self.log.info(f'Attempting to post a previous kill from the buffer: {pickle_payload["kill_result"]}')
                         uploaded = self.api.post_kill_event(pickle_payload["kill_result"], pickle_payload["endpoint"])
                         if uploaded:
                             self.cfg_dict["pickle"].pop(0)
                             self.save_cfg("pickle", self.cfg_dict["pickle"])
             except Exception as e:
-                self.log.error(f"log_pickler(): Error: {e.__class__.__name__} {e}")
-            # Check every n seconds
+                if self.log:
+                    self.log.error(f"log_pickler(): Error: {e.__class__.__name__} {e}")
+                else:
+                    print(f"log_pickler(): Error: {e.__class__.__name__} {e}")
             for sec in range(60):
                 if not self.program_state["enabled"]:
-                    self.log.info(f"Executing final config save.")
+                    if self.log:
+                        self.log.info("Executing final config save.")
                     self.save_cfg("pickle", self.cfg_dict["pickle"])
                     break
                 sleep(1)
