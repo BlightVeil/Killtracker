@@ -22,6 +22,7 @@ class KillTracker():
         self.local_version = "1.6"
         self.log = None
         self.log_parser = None
+        self.cfg_module = None
         self.monitoring = {"active": False}
         self.heartbeat_status = {"active": False}
         self.program_state = {"enabled": True}
@@ -112,12 +113,36 @@ class KillTracker():
                 if game_running and not self.monitoring["active"]:  # Log only when transitioning to running
                     self.log_parser.log_file_location = self.get_sc_log_location(self.get_sc_processes())
                     self.log.success("Star Citizen is running. Starting kill tracking.")
-                    self.rsi_handle["current"] = self.log_parser.find_rsi_handle()
-                    self.log.success(f"Current RSI handle is {self.rsi_handle['current']}.")
+
+                    # Initialize cfg_module if not set
+                    if not self.cfg_module:
+                        self.cfg_module = Cfg_Handler(self.program_state)
+
+                    # Wait for RSI handle to be available before proceeding
+                    found_handle = self.cfg_module.wait_for_rsi_handle(self.log_parser.find_rsi_handle, timeout=30, interval=2)
+
+                    if found_handle:
+                        self.rsi_handle["current"] = self.cfg_module.rsi_handle
+                        self.log.success(f"Current RSI handle is {self.rsi_handle['current']}.")
+                        self.cfg_module.update_rsi_handle(self.rsi_handle["current"])
+                    else:
+                        self.rsi_handle["current"] = "N/A"
+                        self.log.warning("RSI handle not found. Continuing without a handle.")
+
                     self.player_geid["current"] = self.log_parser.find_rsi_geid()
                     self.log.info(f"Current User GEID is {self.player_geid['current']}.")
+
                     self.monitoring["active"] = True
                     self.log_parser.start_tail_log_thread()
+
+                elif game_running and self.monitoring["active"]:
+                    # Check if RSI handle changed during runtime
+                    new_handle = self.log_parser.find_rsi_handle()
+                    if new_handle != self.rsi_handle["current"] and new_handle != "N/A":
+                        self.log.info(f"RSI handle changed to {new_handle}, updating config.")
+                        self.rsi_handle["current"] = new_handle
+                        if self.cfg_module:
+                            self.cfg_module.update_rsi_handle(new_handle)
 
                 elif not game_running and self.monitoring["active"]:  # Log only when transitioning to stopped
                     self.log.warning("Star Citizen has stopped.")
@@ -127,16 +152,16 @@ class KillTracker():
                 self.log.error(f"monitor_game_state(): Error: {e.__class__.__name__} {e}")
             sleep(5)  # Check every 5 seconds
 
-    def auto_shutdown(self, app, delay_in_seconds):
-        def shutdown():
-            sleep(delay_in_seconds) 
-            self.log.warning("Application has been open for 72 hours. Shutting down in 60 seconds.")
-            sleep(60)
-            app.quit()
-            exit(0) 
+        def auto_shutdown(self, app, delay_in_seconds):
+            def shutdown():
+                sleep(delay_in_seconds) 
+                self.log.warning("Application has been open for 72 hours. Shutting down in 60 seconds.")
+                sleep(60)
+                app.quit()
+                exit(0) 
 
-        # Run the shutdown logic in a separate thread
-        Thread(target=shutdown, daemon=True).start()
+                # Run the shutdown logic in a separate thread
+                Thread(target=shutdown, daemon=True).start()
 
 def main():
     try:
@@ -145,25 +170,26 @@ def main():
         print(f"main(): ERROR in creating the KillTracker instance: {e.__class__.__name__} {e}")
 
     try:
-        cfg_module = Cfg_Handler(kt.program_state, kt.rsi_handle["current"])
+        # Initialize Cfg_Handler *without* RSI handle to start
+        kt.cfg_module = Cfg_Handler(kt.program_state)
     except Exception as e:
         print(f"main(): ERROR in creating the Config Handler module: {e.__class__.__name__} {e}")
 
+    # Then continue to pass cfg_module instead of creating new instances separately
     try:
         gui_module = GUI(
-            cfg_module, kt.local_version, kt.anonymize_state, kt.mute_state
+            kt.cfg_module, kt.local_version, kt.anonymize_state, kt.mute_state
         )        
     except Exception as e:
         print(f"main(): ERROR in creating the GUI module: {e.__class__.__name__} {e}")
 
     try:
         sound_module = Sounds(
-            cfg_module, kt.mute_state
+            kt.cfg_module, kt.mute_state
         )          
     except Exception as e:
         print(f"main(): ERROR in setting up the Sounds module: {e.__class__.__name__} {e}")
 
-    # Link Sounds to GUI here (to resolve circular dependency)
     try:
         gui_module.sounds = sound_module
     except Exception as e:
@@ -171,14 +197,13 @@ def main():
 
     try:
         api_client_module = API_Client(
-            cfg_module, gui_module, kt.monitoring, kt.local_version, kt.rsi_handle
+            kt.cfg_module, gui_module, kt.monitoring, kt.local_version, kt.rsi_handle
         )
     except Exception as e:
         print(f"main(): ERROR in setting up the API Client module: {e.__class__.__name__} {e}")
 
-    # Link API to Cfg Handler here (to resolve circular dependency)
     try:
-        cfg_module.api = api_client_module
+        kt.cfg_module.api = api_client_module
     except Exception as e:
         print(f"main(): ERROR linking API to Cfg Handler: {e.__class__.__name__} {e}")
 
@@ -202,23 +227,18 @@ def main():
         print(f"main(): ERROR in checking if the game is running: {e.__class__.__name__} {e}")
 
     try:
-        # API needs ref to some class instances for functions
         api_client_module.cm = cm_module
-        # GUI needs ref to some class instances to setup the GUI
         gui_module.api = api_client_module
         gui_module.cm = cm_module
-        # Instantiate the GUI
         gui_module.setup_gui(game_running)
     except Exception as e:
         print(f"main(): ERROR in setting up the GUI: {e.__class__.__name__} {e}")
-    
+
     if game_running:
         try:
-            #TODO Make a module import framework to easily add in future modules
             kt.log_parser = log_parser_module
-            # Add logger ref to classes
             kt.log = gui_module.log
-            cfg_module.log = gui_module.log
+            kt.cfg_module.log = gui_module.log
             api_client_module.log = gui_module.log
             sound_module.log = gui_module.log
             cm_module.log = gui_module.log
@@ -230,30 +250,24 @@ def main():
             sound_module.setup_sounds()
         except Exception as e:
             print(f"main(): ERROR in setting up the sounds module: {e.__class__.__name__} {e}")
-        
+
         try:
-            # Kill Tracker log pickler
-            monitor_thr = Thread(target=cfg_module.log_pickler, daemon=True).start()
+            Thread(target=kt.cfg_module.log_pickler, daemon=True).start()
         except Exception as e:
             print(f"main(): ERROR starting log pickler: {e.__class__.__name__} {e}")
 
         try:
-            # Kill Tracker monitor loop
-            monitor_thr = Thread(target=kt.monitor_game_state, daemon=True).start()
-            kt.auto_shutdown(gui_module.app, 72 * 60 * 60)
+            Thread(target=kt.monitor_game_state, daemon=True).start()
+            #kt.auto_shutdown(gui_module.app, 72 * 60 * 60)
         except Exception as e:
             print(f"main(): ERROR starting game state monitoring: {e.__class__.__name__} {e}")
-    
+
     try:
-        # GUI main loop
         gui_module.app.mainloop()
-        # Ensure all threads are stopped
         kt.program_state["enabled"] = False
     except KeyboardInterrupt:
         print("Program interrupted. Exiting gracefully...")
         kt.monitoring["active"] = False
-        if isinstance(monitor_thr, Thread):
-            monitor_thr.join(1)
         gui_module.app.quit()
     except Exception as e:
         print(f"main(): ERROR starting GUI main loop: {e.__class__.__name__} {e}")

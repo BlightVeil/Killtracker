@@ -1,58 +1,132 @@
 import base64
 import hashlib
 import json
+import re
+import time
 from time import sleep
 from pathlib import Path
 
 class Cfg_Handler:
-    """Config Handler with simple XOR encryption (built-in only)."""
+    """Config Handler with backward compatibility and per-account encrypted config."""
 
     def __init__(self, program_state, rsi_handle=None):
         self.log = None
         self.api = None
         self.program_state = program_state
-        self.old_cfg_path = Path.cwd() / "killtracker_key.cfg"
-        self.cfg_path = Path.cwd() / "bv_killtracker.cfg"
+        self.old_key_path = Path.cwd() / "killtracker_key.cfg"
+        self.old_cfg_path = Path.cwd() / "bv_killtracker.cfg"
+
+        self.rsi_handle = rsi_handle if rsi_handle and rsi_handle != "N/A" else None
         self.cfg_dict = {"key": "", "volume": {"level": 0.5, "is_muted": False}, "pickle": []}
-        self.rsi_handle = rsi_handle if rsi_handle else "default_handle"
-        self.key = self._derive_key(self.rsi_handle)
+        self.key = None
+        self.cfg_path = None
+
+        if self.rsi_handle:
+            self._set_handle(self.rsi_handle)
+
+    def _safe_filename(self, handle: str) -> str:
+        return re.sub(r'[\\/*?:"<>|]', "_", handle)
 
     def _derive_key(self, rsi_handle: str) -> bytes:
-        """Derive a 32-byte key from the RSI handle using SHA256."""
         return hashlib.sha256(rsi_handle.encode()).digest()
 
     def _xor_encrypt(self, data: bytes) -> bytes:
-        """Simple XOR encrypt/decrypt with repeating key."""
-        key = self.key
-        return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
+        return bytes(b ^ self.key[i % len(self.key)] for i, b in enumerate(data))
 
-    def load_cfg(self, data_type: str) -> str:
-        """Load the config with simple XOR decryption."""
-        if data_type == "key" and self.old_cfg_path.exists():
-            self.old_cfg_path.unlink()
-            print(f"Removed old Kill Tracker key file.")
+    def _set_handle(self, handle: str):
+        self.rsi_handle = handle
+        self.key = self._derive_key(handle)
+        self.cfg_path = Path.cwd() / f"bv_killtracker_{self._safe_filename(handle)}.cfg"
+        print(f"Using config file: {self.cfg_path}")
+
+    def wait_for_rsi_handle(self, find_handle_callback, timeout=30, interval=2):
+        start_time = time.time()
+        while (not self.rsi_handle or self.rsi_handle == "N/A") and (time.time() - start_time < timeout):
+            handle = find_handle_callback()
+            if handle and handle != "N/A":
+                self._set_handle(handle)
+                self.load_cfg("pickle")
+                return True
+            time.sleep(interval)
+        if not self.rsi_handle or self.rsi_handle == "N/A":
+            print("RSI handle not found within timeout.")
+            return False
+        return True
+
+    def update_rsi_handle(self, new_handle: str):
+        if not new_handle or new_handle == "N/A":
+            return
+        if new_handle != self.rsi_handle:
+            self._set_handle(new_handle)
+            self.cfg_dict = {"key": "", "volume": {"level": 0.5, "is_muted": False}, "pickle": []}
+            print(f"Switched to new RSI handle: {self.rsi_handle}")
+            self.load_cfg("pickle")
+
+    def migrate_old_configs(self):
+        # Migrate old key file
+        if self.old_key_path.exists() and (not self.cfg_path or not self.cfg_path.exists()):
+            try:
+                with open(self.old_key_path, "r") as f:
+                    old_key = f.readline().strip()
+                if old_key:
+                    print(f"Kill Tracker v1.5 saved key loaded: {old_key}")
+                    self.cfg_dict["key"] = old_key
+                    self.save_cfg("key", old_key)
+                self.old_key_path.unlink()
+                print("Migrated and removed old Kill Tracker key file.")
+            except Exception as e:
+                print(f"Failed to migrate old key file: {e}")
+
+        # Migrate old config file
+        if self.old_cfg_path.exists() and self.cfg_path and not self.cfg_path.exists():
+            try:
+                # Read old base64-encoded JSON config
+                with open(self.old_cfg_path, "r") as f:
+                    base64_data = f.readline().strip()
+                json_str = base64.b64decode(base64_data.encode('ascii')).decode('ascii')
+                self.cfg_dict = json.loads(json_str)
+                print(f"Migrated old config loaded: {self.cfg_dict}")
+                self.save_cfg("pickle", self.cfg_dict.get("pickle", []))
+                self.old_cfg_path.unlink()
+                print(f"Migrated and removed old config file to {self.cfg_path}")
+            except Exception as e:
+                print(f"Failed to migrate old config file: {e}")
+
+    def load_cfg(self, data_type: str):
+        if not self.cfg_path or not self.key:
+            print("Cannot load config: RSI handle not set.")
+            return "error"
+
+        # Run migrations if needed
+        self.migrate_old_configs()
 
         if not self.cfg_path.exists():
+            print(f"Config file {self.cfg_path} not found. Using default config.")
             return self.cfg_dict.get(data_type, "error")
 
         try:
             with open(str(self.cfg_path), "rb") as f:
                 file_data = f.read()
+            # Try XOR decrypt + base64 decode
             try:
-                # Decrypt with XOR and base64 decode
                 decrypted_data = self._xor_encrypt(base64.b64decode(file_data)).decode('utf-8')
                 self.cfg_dict = json.loads(decrypted_data)
                 print(f"load_cfg(): cfg: {self.cfg_dict}")
                 return self.cfg_dict.get(data_type, "error")
-            except Exception as e:
-                print(f"Failed to decrypt config: {e}")
-                return "error"
+            except Exception:
+                # Fallback: old Base64 encoded JSON (should not happen if migrated)
+                cfg_str = base64.b64decode(file_data).decode('ascii')
+                self.cfg_dict = json.loads(cfg_str)
+                print("Fallback: loaded old Base64 config.")
+                return self.cfg_dict.get(data_type, "error")
         except Exception as e:
             print(f"Failed to load config file: {e}")
             return "error"
 
     def save_cfg(self, data_type: str, data) -> None:
-        """Encrypt and save the configuration with XOR and base64."""
+        if not self.cfg_path or not self.key:
+            print("Cannot save config: RSI handle not set.")
+            return
         try:
             self.cfg_dict[data_type] = data
             cfg_json = json.dumps(self.cfg_dict)
@@ -68,7 +142,6 @@ class Cfg_Handler:
                 print(f"Was not able to save the config to {str(self.cfg_path)} - {e}.")
 
     def log_pickler(self) -> None:
-        """Pickle and unpickle kill logs."""
         while self.program_state["enabled"]:
             try:
                 if len(self.cfg_dict["pickle"]) > 0:

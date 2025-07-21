@@ -25,13 +25,19 @@ class Sounds():
         """Load sound settings from cfg file."""
         try:
             volume_dict = self.cfg_handler.load_cfg("volume")
-            self.mute_state["enabled"] = volume_dict["is_muted"]
-            self.prev_volume = volume_dict["level"]
+
+            if not isinstance(volume_dict, dict):  # Fallback if error or wrong type
+                print("Config volume not found, using defaults.")
+                volume_dict = {"level": 0.5, "is_muted": False}
+
+            self.mute_state["enabled"] = volume_dict.get("is_muted", False)
+            self.prev_volume = volume_dict.get("level", 0.5)
+            self.curr_volume = 0.0 if self.mute_state["enabled"] else self.prev_volume
+
             if self.mute_state["enabled"]:
-                self.curr_volume = 0.0
-                print(f"Sound volume muted.")
+                print("Sound volume muted.")
             else:
-                self.curr_volume = volume_dict["level"]
+                print(f"Sound volume set to {self.curr_volume * 100:.0f}%")
         except Exception as e:
             error_line = f"load_sound_settings(): Error: {e.__class__.__name__} {e}"
             if self.log:
