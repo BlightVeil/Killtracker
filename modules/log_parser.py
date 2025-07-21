@@ -325,7 +325,9 @@ class LogParser():
                     'victim': curr_user,
                     'killer': curr_user,
                     'weapon': weapon,
-                    'zone': killed_zone
+                    'zone': killed_zone,
+                    'game_mode': self.game_mode,
+                    'client_ver': self.local_version
                 }
             elif killed == curr_user:
                 mapped_weapon = self.get_sc_data("weapons", weapon)
@@ -336,7 +338,9 @@ class LogParser():
                     'victim': curr_user,
                     'killer': killer,
                     'weapon': mapped_weapon,
-                    'zone': self.active_ship["current"]
+                    'zone': self.active_ship["current"],
+                    'game_mode': self.game_mode,
+                    'client_ver': self.local_version
                 }
             elif killer.lower() == "unknown":
                 # Potential Ship reset
