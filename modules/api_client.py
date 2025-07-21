@@ -19,7 +19,7 @@ class API_Client():
         self.monitoring = monitoring
         self.local_version = local_version
         self.rsi_handle = rsi_handle
-        self.request_timeout = 12
+        self.request_timeout = 3
         self.api_key = {"value": None}
         self.api_fqdn = "http://blightveil.org:25966"
         self.sc_data = {"weapons": [], "ships": [], "ignoredVictimRules": []}

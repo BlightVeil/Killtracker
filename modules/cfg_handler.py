@@ -29,13 +29,8 @@ class Cfg_Handler:
     def load_cfg(self, data_type: str) -> str:
         """Load the config with simple XOR decryption."""
         if data_type == "key" and self.old_cfg_path.exists():
-            with open(str(self.old_cfg_path), "r") as f:
-                entered_key = f.readline().strip()
-                if entered_key:
-                    print(f"Kill Tracker v1.5 saved key loaded: {entered_key}")
-                    self.cfg_dict["key"] = entered_key
-                    print(f"Removed old Kill Tracker v1.5 key.")
-                    return self.cfg_dict[data_type]
+            self.old_cfg_path.unlink()
+            print(f"Removed old Kill Tracker key file.")
 
         if not self.cfg_path.exists():
             return self.cfg_dict.get(data_type, "error")

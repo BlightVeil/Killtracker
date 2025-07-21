@@ -63,29 +63,36 @@ class LogParser():
         try:
             # Read all lines to find out what game mode player is currently, in case they booted up late.
             # Don't upload kills, we don't want repeating last session's kills in case they are actually available.
-            self.log.info("Loading old log (if available)! Note that old kills shown will not be uploaded as they are stale.")
-            lines = sc_log.readlines()
-            for line in lines:
-                if not self.api.api_key["value"]:
-                    self.log.error("Error: key is invalid. Loading old log stopped.")
-                    break
-                self.read_log_line(line, False)
-            # After loading old log, always default to FPS on the label
-            self.active_ship["current"] = "FPS"
-            self.active_ship_id = "N/A"
-            self.gui.update_vehicle_status("FPS")
+            if self.monitoring["active"]:
+                self.log.info("Loading old log (if available)! Note that old kills shown will not be uploaded as they are stale.")
+                lines = sc_log.readlines()
+                self.log.debug(f"tail_log(): Number of lines in old log: {len(lines)}")
         except Exception as e:
             self.log.error(f"Error reading old log file: {e.__class__.__name__} {e}")
-        
+
+        for line in lines:
+            try:
+                if not self.api.api_key["value"] or not self.monitoring["active"]:
+                    self.log.error("Key expired or SC was closed. Loading old log stopped.")
+                    break
+                self.read_log_line(line, False)
+            except Exception as e:
+                self.log.warning(f"Error reading line from old log file, continuing anyway. Error: {e.__class__.__name__} {e}")
+
         try:
-            # Main loop to monitor the log
-            last_log_file_size = stat(self.log_file_location).st_size
-            self.log.debug(f"tail_log(): Last log size: {last_log_file_size}.")
-            self.log.success("Kill Tracking initiated.")
-            self.log.success("Go Forth And Slaughter...")
+            # After loading old log, always default to FPS on the label
+            if self.monitoring["active"]:
+                self.active_ship["current"] = "FPS"
+                self.active_ship_id = "N/A"
+                self.gui.update_vehicle_status("FPS")
+                last_log_file_size = stat(self.log_file_location).st_size
+                self.log.debug(f"tail_log(): Last log size: {last_log_file_size}.")
+                self.log.success("Kill Tracking initiated.")
+                self.log.success("Go Forth And Slaughter...")
         except Exception as e:
-            self.log.error(f"Error getting log file size: {e.__class__.__name__} {e}")
+            self.log.error(f"Error doing pre-log reading setup: {e.__class__.__name__} {e}")
         
+        # Main loop to monitor the log
         while self.monitoring["active"]:
             try:
                 if not self.api.api_key["value"]:
@@ -111,6 +118,7 @@ class LogParser():
                     self.read_log_line(line, True)
             except Exception as e:
                 self.log.error(f"Error reading game log file: {e.__class__.__name__} {e}")
+        sc_log.close()
         self.log.info("Game log monitoring has stopped.")
 
     def _extract_ship_info(self, line):
@@ -314,6 +322,8 @@ class LogParser():
                 kill_result["result"] = "suicide"
                 kill_result["data"] = {
                     'player': curr_user,
+                    'victim': curr_user,
+                    'killer': curr_user,
                     'weapon': weapon,
                     'zone': killed_zone
                 }

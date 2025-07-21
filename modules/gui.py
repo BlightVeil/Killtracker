@@ -126,6 +126,14 @@ class GUI():
             self.mute_button.config(text="🔊", fg="#ffffff", bg="#484759")
             self.sounds.set_volume(volume)
 
+    def update_vehicle_status(self, status_text):
+        """Handle vehicle status."""
+        if hasattr(self, 'vehicle_status_label') and self.vehicle_status_label:
+            self.vehicle_status_label.config(text=f"Vehicle Status: {status_text}")
+            #self.app.update_idletasks() 
+        else:
+            self.log.error("update_vehicle_status(): label is not set or does not exist.")
+
     def async_loading_animation(self) -> None:
         def animate():
             try:
@@ -182,11 +190,21 @@ class GUI():
         self.key_entry = tk.Entry(key_frame, width=30, font=("Times New Roman", 12))
         self.key_entry.pack(side=tk.LEFT, pady=(0, 0))
 
+        # Status Frame
+        status_frame = tk.Frame(self.app, bg="#484759")
+        status_frame.pack(fill='both', expand=True, padx=(75, 75), pady=(20, 10))
+        
+        # Vehicle Status Label
+        self.vehicle_status_label = self.create_label(
+            status_frame, text="Vehicle Status: N/A", font=("Times New Roman", 12, 'bold'), fg="#FFD700", bg="#484759"
+        )
+        self.vehicle_status_label.pack(side=tk.LEFT, padx=(50, 0), pady=(0, 0))
+        
         # API Status Label
         self.api_status_label = self.create_label(
-            self.app, text="Key Status: Not Validated", font=("Times New Roman", 12), fg="#ff0000", bg="#484759"
+            status_frame, text="Key Status: Not Validated", font=("Times New Roman", 12, 'bold'), fg="#ff0000", bg="#484759"
         )
-        self.api_status_label.pack(pady=(0, 10))
+        self.api_status_label.pack(side=tk.RIGHT, padx=(0, 50), pady=(0, 0))
 
         # Kill Frame
         kill_frame = tk.Frame(self.app, bg="#484759")
@@ -221,12 +239,6 @@ class GUI():
             kill_frame, text="KD Ratio: --", font=("Times New Roman", 12, 'bold'), fg="#00FFFF", bg="#484759"
         )
         self.kd_ratio_label.pack(side=tk.RIGHT, padx=(0, 20), pady=(0, 0))
-        
-        # Vehicle Status Label
-        self.vehicle_status_label = self.create_label(
-            kill_frame, text="Status: FPS", font=("Times New Roman", 12, 'bold'), fg="#FFD700", bg="#484759"
-        )
-        self.vehicle_status_label.pack(side=tk.RIGHT, padx=(0, 20), pady=(0, 0))
 
         # Update the button to use the new combined function
         activate_load_key_button = self.create_button(
@@ -282,13 +294,6 @@ class GUI():
         # App logger area
         self.log = AppLogger(self.setup_app_log_display())
         self.log.text_widget.pack(padx=10, pady=10)
-
-    def update_vehicle_status(self, status_text):
-        if hasattr(self, 'vehicle_status_label') and self.vehicle_status_label:
-            self.vehicle_status_label.config(text=f"Status: {status_text}")
-            self.app.update_idletasks() 
-        else:
-            self.log.error("update_vehicle_status(): vehicle_status_label is not set or does not exist.")
 
     def setup_gui(self, game_running):
         """Setup the GUI."""
