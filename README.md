@@ -1,11 +1,18 @@
-Official-BlightVeilKillTracker
+## Official Kill Tracker for BlightVeil
 
-KillTracker for BlightVeil StarCitizen org
 
-Download the .exe From the Releases Page, or run the python kill tracker file from console.
+**Install:**
 
-Make sure to launch the Game Launch, then launch the KillTracker, and enjoy
+Download the .exe From the Releases Page, or run the python main file from console.
 
-No Support will be provided for Compiling your own KillTracker exe.
 
-Any Abuse of the KillTracker Will Result in your Kills Not being Tracked
+**How to use:**
+1. Launch the Game
+2. Launch the Kill Tracker and input your Kill Tracker key
+3. Kill everyone you meet (in game)
+
+
+**Any abuse of the Kill Tracker will result in a ban from your kills being tracked.**
+
+
+*SIC SEMPER TYRANNIS ET CORVIS*
