@@ -36,8 +36,11 @@ class LogParser():
 
     def start_tail_log_thread(self) -> None:
         """Start the log tailing in a separate thread only if it's not already running."""
-        thr = Thread(target=self.tail_log, daemon=True)
-        thr.start()
+        try:
+            thr = Thread(target=self.tail_log, daemon=True)
+            thr.start()
+        except Exception as e:
+            self.log.error(f"start_tail_log_thread(): {e.__class__.__name__} {e}")
 
     def tail_log(self) -> None:
         """Read the log file and display events in the GUI."""
@@ -47,9 +50,9 @@ class LogParser():
                 self.log.error(f"No log file found at {self.log_file_location}")
                 return
         except Exception as e:
-            self.log.error(f"Error opening log file: {e.__class__.__name__} {e}")
+            self.log.error(f"tail_log(): When opening log file: {e.__class__.__name__} {e}")
         try:
-            self.log.warning("Enter Kill Tracker Key to establish Servitor connection...")
+            self.log.warning("Please enter Kill Tracker Key to establish a connection with Servitor. If you don't have a key from a previous session, please generate one in Discord.")
             sleep(1)
             while self.monitoring["active"]:
                 # Block loop until API key is valid
@@ -58,7 +61,7 @@ class LogParser():
                 sleep(1)
             self.log.debug(f"tail_log(): Received key: {self.api.api_key}. Moving on...")
         except Exception as e:
-            self.log.error(f"Error waiting for Servitor connection to be established: {e.__class__.__name__} {e}")
+            self.log.error(f"tail_log(): When waiting for Servitor connection to be established: {e.__class__.__name__} {e}")
 
         try:
             # Read all lines to find out what game mode player is currently, in case they booted up late.
@@ -68,7 +71,7 @@ class LogParser():
                 lines = sc_log.readlines()
                 self.log.debug(f"tail_log(): Number of lines in old log: {len(lines)}")
         except Exception as e:
-            self.log.error(f"Error reading old log file: {e.__class__.__name__} {e}")
+            self.log.error(f"tail_log(): When reading old log file: {e.__class__.__name__} {e}")
 
         for line in lines:
             try:
@@ -77,7 +80,7 @@ class LogParser():
                     break
                 self.read_log_line(line, False)
             except Exception as e:
-                self.log.warning(f"Error reading line from old log file, continuing anyway. Error: {e.__class__.__name__} {e}")
+                self.log.warning(f"Could not read line from old log file, continuing anyway. Error: {e.__class__.__name__} {e}")
 
         try:
             # After loading old log, always default to FPS on the label
@@ -96,15 +99,9 @@ class LogParser():
         while self.monitoring["active"]:
             try:
                 if not self.api.api_key["value"]:
-                    self.log.error("Error: key is invalid. Kill Tracking is not active...")
+                    self.log.error("Key is invalid. Kill Tracking is not active...")
                     sleep(5)
                     continue
-                # Handle RSI handle first before continuing
-                if self.rsi_handle["current"] == "N/A":
-                    self.log.error(f"RSI handle name has not been found yet. Retrying ...")
-                    self.rsi_handle["current"] = self.find_rsi_handle()
-                    if self.rsi_handle["current"] != "N/A":
-                        self.log.success(f"Refound RSI handle name: {self.rsi_handle['current']}.")
                 where = sc_log.tell()
                 line = sc_log.readline()
                 if not line:
@@ -296,7 +293,7 @@ class LogParser():
                     return data["name"]
             self.log.warning(f"Did not find the human readable version of the raw log string: {data_id}")
         except Exception as e:
-            self.log.error(f"get_weapon(): Error: {e.__class__.__name__} {e}")
+            self.log.error(f"get_weapon(): {e.__class__.__name__} {e}")
             return data_id
 
     def parse_kill_line(self, line:str, curr_user:str):
@@ -362,7 +359,7 @@ class LogParser():
                 }
             return kill_result
         except Exception as e:
-            self.log.error(f"parse_kill_line(): Error: {e.__class__.__name__} {e}")
+            self.log.error(f"parse_kill_line(): {e.__class__.__name__} {e}")
             return {"result": "", "data": None}
 
     def parse_death_line(self, line:str, curr_user:str):
@@ -388,7 +385,7 @@ class LogParser():
             }
             return death_result
         except Exception as e:
-            self.log.error(f"parse_kill_line(): Error: {e.__class__.__name__} {e}")
+            self.log.error(f"parse_kill_line(): {e.__class__.__name__} {e}")
             return {"result": "", "data": None}
 
     def find_rsi_handle(self) -> str:

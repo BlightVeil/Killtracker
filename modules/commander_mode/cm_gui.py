@@ -149,7 +149,7 @@ class CM_GUI():
 
             search_var.trace("w", search_users)
         except Exception as e:
-            self.log.error(f"setup_commander_mode(): Error: {e.__class__.__name__} {e}")
+            self.log.error(f"setup_commander_mode(): {e.__class__.__name__} {e}")
     
     def destroy_window(self, commander_window) -> None:
         """Stop heartbeat if window is closed"""

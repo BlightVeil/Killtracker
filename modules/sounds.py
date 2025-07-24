@@ -19,31 +19,30 @@ class Sounds():
         self.curr_volume = 0.5  # Default volume (0.0 to 1.0)
         self.prev_volume = 0.5
         pygame.mixer.init()
-        self.load_sound_settings()
 
     def load_sound_settings(self) -> None:
-        """Load sound settings from cfg file."""
+        """Load sound settings from cfg."""
         try:
-            volume_dict = self.cfg_handler.load_cfg("volume")
-
-            if not isinstance(volume_dict, dict):  # Fallback if error or wrong type
-                print("Config volume not found, using defaults.")
-                volume_dict = {"level": 0.5, "is_muted": False}
-
-            self.mute_state["enabled"] = volume_dict.get("is_muted", False)
-            self.prev_volume = volume_dict.get("level", 0.5)
+            volume_dict = self.cfg_handler.cfg_dict["volume"]
+            self.mute_state["enabled"] = volume_dict["is_muted"]
+            self.prev_volume = volume_dict["level"]
             self.curr_volume = 0.0 if self.mute_state["enabled"] else self.prev_volume
 
             if self.mute_state["enabled"]:
-                print("Sound volume muted.")
+                if self.log:
+                    self.log.info("Sound volume muted.")
+                else:
+                    print("Sound volume muted.")
             else:
-                print(f"Sound volume set to {self.curr_volume * 100:.0f}%")
+                if self.log:
+                    self.log.info(f"Sound volume set to {self.curr_volume * 100:.0f}%")
+                else:
+                    print(f"Sound volume set to {self.curr_volume * 100:.0f}%")
         except Exception as e:
-            error_line = f"load_sound_settings(): Error: {e.__class__.__name__} {e}"
             if self.log:
-                self.log.error(error_line)
+                self.log.warning(f"load_sound_settings(): {e.__class__.__name__} {e}")
             else:
-                print(error_line)
+                print(f"load_sound_settings(): {e.__class__.__name__} {e}")
 
     def set_volume(self, volume:float) -> None:
         """Set the playback volume."""
@@ -54,10 +53,10 @@ class Sounds():
                 self.prev_volume = volume
             if self.mute_state["enabled"]:
                 self.curr_volume = 0.0
-                self.log.warning(f"Sound volume muted.")
+                self.log.info(f"Sound volume muted.")
             else:
                 if self.curr_volume != self.prev_volume:
-                    self.log.warning(f"Sound volume unmuted.")
+                    self.log.info(f"Sound volume unmuted.")
                 self.curr_volume = self.prev_volume
 
             pygame.mixer.music.set_volume(self.curr_volume)
@@ -68,7 +67,7 @@ class Sounds():
             if not self.mute_state["enabled"]:
                 self.log.debug(f"Sound volume set to {self.curr_volume * 100:.0f}%")
         except Exception as e:
-            self.log.error(f"set_volume(): Error: {e.__class__.__name__} {e}")
+            self.log.error(f"set_volume(): {e.__class__.__name__} {e}")
 
     def setup_sounds(self) -> None:
         """Setup the sounds module."""
@@ -80,9 +79,9 @@ class Sounds():
             sound_files = listdir(str(self.sounds_live_dir)) if path.exists(str(self.sounds_live_dir)) else []
             self.log.info(f"Included sounds found at: {str(self.sounds_live_dir)}")
             self.log.info(f"Sound Files inside: {sound_files}")
-            self.log.success("✅ To add new Sounds to the Kill Tracker, drop in .wav files to the sounds folder.")
+            self.log.info("To add new Sounds to the Kill Tracker, drop in .wav files to the sounds folder.")
         except Exception as e:
-            self.log.error(f"setup_sounds(): Error: {e.__class__.__name__} {e}")
+            self.log.error(f"setup_sounds(): {e.__class__.__name__} {e}")
 
     def create_sounds_dir(self) -> None:
         """Create directory for sounds and set vars."""
@@ -94,7 +93,7 @@ class Sounds():
             self.log.debug(f"PyInstaller temp executable directory: {str(self.sounds_pyinst_dir)}")
             self.log.debug(f"The directory where the executable lives: {str(self.sounds_live_dir)}")
         except Exception as e:
-            self.log.error(f"create_sounds_dir(): Error: {e.__class__.__name__} {e}")
+            self.log.error(f"create_sounds_dir(): {e.__class__.__name__} {e}")
 
     def copy_sounds(self, source:Path, target:Path) -> None:
         """Copy new sound files from one folder to another."""
@@ -104,7 +103,7 @@ class Sounds():
             if not target.exists():
                 raise Exception(f"Target sounds folder not found: {str(target)}")
         except Exception as e:
-            self.log.error(f"copy_sounds(): Error: {e.__class__.__name__} {e}")
+            self.log.error(f"copy_sounds(): {e.__class__.__name__} {e}")
 
         try:
             source_files = list(source.glob('**/*.wav'))
@@ -114,7 +113,7 @@ class Sounds():
                     shutil.copy(sound_file, target_path)
                     self.log.debug(f"Copied sound: {sound_file} to {target_path}")
         except Exception as e:
-            self.log.error(f"copy_sounds(): Error: {e.__class__.__name__} {e}")
+            self.log.error(f"copy_sounds(): {e.__class__.__name__} {e}")
 
     def play_random_sound(self) -> None:
         """Play a random sound from the sounds folder."""
@@ -128,6 +127,6 @@ class Sounds():
                 sound.play()
                 sleep(sound.get_length())
             except Exception as e:
-                self.log.error(f"Error playing sound {sound_to_play}: {e.__class__.__name__} {e}")
+                self.log.error(f"When playing sound {sound_to_play}: {e.__class__.__name__} {e}")
         else:
             self.log.error("No sound files found.")

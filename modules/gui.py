@@ -31,7 +31,7 @@ class AppLogger():
     @Decorator
     def debug(self, log_time, message):
         if global_settings.DEBUG_MODE["enabled"]:
-            self.text_widget.insert(tk.END, log_time + " DEBUG " + message + "\n")
+            self.text_widget.insert(tk.END, log_time + " DEBUG: " + message + "\n")
 
     @Decorator
     def info(self, log_time, message):
@@ -39,15 +39,15 @@ class AppLogger():
 
     @Decorator
     def warning(self, log_time, message):
-        self.text_widget.insert(tk.END, log_time + " ⚠️ " + message + "\n")
+        self.text_widget.insert(tk.END, log_time + " ⚠️ WARNING: " + message + "\n")
 
     @Decorator
     def error(self, log_time, message):
-        self.text_widget.insert(tk.END, log_time + " ❌ " + message + "\n")
+        self.text_widget.insert(tk.END, log_time + " ❌ ERROR: " + message + "\n")
 
     @Decorator
     def success(self, log_time, message):
-        self.text_widget.insert(tk.END, log_time + " ✅ " + message + "\n")
+        self.text_widget.insert(tk.END, log_time + " ✅ SUCCESS: " + message + "\n")
 
 #########################################################################################################
 ### GUI CLASS                                                                                         ###
@@ -67,6 +67,7 @@ class GUI():
         self.cm = None
         self.key_entry = None
         self.api_status_label = None
+        self.volume_slider = None
         self.curr_killstreak_label = None
         self.max_killstreak_label = None
         self.session_kills_label = None
@@ -85,22 +86,22 @@ class GUI():
         if self.anonymize_state["enabled"]:
             self.anonymize_state["enabled"] = False
             self.anonymize_button.config(text=" Enable Anonymity ", fg="#ffffff", bg="#000000")
-            self.log.error(f"You are not anonymous.")
+            self.log.info(f"You are not anonymous.")
         else:
             self.anonymize_state["enabled"] = True
             self.anonymize_button.config(text="Anonymity Enabled", fg="#000000", bg="#04B431")
-            self.log.success(f"You are anonymous.")
+            self.log.info(f"You are anonymous.")
 
     def toggle_debug(self):
         """Handle debug button."""
         if global_settings.DEBUG_MODE["enabled"]:
             global_settings.DEBUG_MODE["enabled"] = False
             self.debug_button.config(text=" Enable Debug Mode ", fg="#ffffff", bg="#000000")
-            self.log.error(f"Turned off Debug Mode.")
+            self.log.info(f"Turned off Debug Mode.")
         else:
             global_settings.DEBUG_MODE["enabled"] = True
             self.debug_button.config(text="Debug Mode Enabled", fg="#000000", bg="#04B431")
-            self.log.success(f"Turned on Debug Mode.")
+            self.log.info(f"Turned on Debug Mode.")
 
     def toggle_mute(self):
         """Handle mute button."""
@@ -142,7 +143,7 @@ class GUI():
                     self.app.update_idletasks()
                     sleep(0.2)
             except Exception as e:
-                self.log.error(f"animate(): Error: {e.__class__.__name__} {e}")
+                self.log.error(f"animate(): {e.__class__.__name__} {e}")
                 return
         Thread(target=animate, daemon=True).start()
     
@@ -266,17 +267,12 @@ class GUI():
         )
         self.debug_button.pack(side=tk.LEFT, padx=(5, 0), pady=(5, 5))
 
-        if self.mute_state["enabled"]:
-            self.mute_button = self.create_button(
-                options_frame, text="🔇", font=("Times New Roman", 14), command=self.toggle_mute, fg="#ffffff", bg="#8A0000", height=0, width=3
-            )
-        else:
-            self.mute_button = self.create_button(
-                options_frame, text="🔊", font=("Times New Roman", 14), command=self.toggle_mute, fg="#ffffff", bg="#484759", height=0, width=3
-            )
+        self.mute_button = self.create_button(
+            options_frame, text="🔊", font=("Times New Roman", 14), command=self.toggle_mute, fg="#ffffff", bg="#484759", height=0, width=3
+        )
         self.mute_button.pack(side=tk.LEFT, padx=(50, 0))
 
-        volume_slider = tk.Scale(
+        self.volume_slider = tk.Scale(
             options_frame,
             from_=0,
             to=100,
@@ -288,8 +284,8 @@ class GUI():
             highlightbackground="#484759",
             command=lambda val: self.handle_volume(int(val) / 100)
         )
-        volume_slider.set(self.cfg_handler.cfg_dict["volume"]["level"] * 100)  # Default volume to 50%
-        volume_slider.pack(side=tk.LEFT, padx=(5, 0), pady=(0, 15))
+        self.volume_slider.set(self.cfg_handler.cfg_dict["volume"]["level"] * 100)  # Default volume to 50%
+        self.volume_slider.pack(side=tk.LEFT, padx=(5, 0), pady=(0, 15))
         
         # App logger area
         self.log = AppLogger(self.setup_app_log_display())

@@ -50,7 +50,7 @@ class CM_Core(CM_API_Client, CM_GUI):
                     self.log.debug(f"allocate_selected_users(): Inserting into allocated forces: {user_info}")
                     self.allocated_forces_insert(f"{user_info['player']} - Zone: {user_info['zone']}")
         except Exception as e:
-            self.log.error(f"allocate_selected_users(): Error: {e.__class__.__name__} - {e}")
+            self.log.error(f"allocate_selected_users(): {e.__class__.__name__} - {e}")
 
     def allocate_all_users(self) -> None:
         """Allocate all Connected Users to Allocated Forces if not already in."""
@@ -64,7 +64,7 @@ class CM_Core(CM_API_Client, CM_GUI):
                     self.log.debug(f"allocate_all_users(): Inserting into allocated forces: {conn_user}")
                     self.allocated_forces_insert(f"{conn_user['player']} - Zone: {conn_user['zone']}")
         except Exception as e:
-            self.log.error(f"allocate_all_users(): Error: {e.__class__.__name__} - {e}")
+            self.log.error(f"allocate_all_users(): {e.__class__.__name__} - {e}")
 
     def take_command(self) -> None:
         """Start Tracking a battle"""
@@ -72,7 +72,7 @@ class CM_Core(CM_API_Client, CM_GUI):
             self.is_commander = True
             self.post_heartbeat_event(None, None, None)
         except Exception as e:
-            self.log.error(f"take_command(): Error: {e.__class__.__name__} - {e}")
+            self.log.error(f"take_command(): {e.__class__.__name__} - {e}")
 
     def abort_command_func(self) -> None:
         """Set flag to abort command and discard remaining kill counts"""
@@ -83,7 +83,7 @@ class CM_Core(CM_API_Client, CM_GUI):
                 self.abort_command = False
                 self.is_commander = False
         except Exception as e:
-            self.log.error(f"abort_command(): Error: {e.__class__.__name__} - {e}")
+            self.log.error(f"abort_command(): {e.__class__.__name__} - {e}")
 
     def start_battle_func(self) -> None:
         """Set flag to abort command and discard remaining kill counts"""
@@ -92,7 +92,7 @@ class CM_Core(CM_API_Client, CM_GUI):
             self.mark_complete = False
             self.post_heartbeat_event(None, None, None)
         except Exception as e:
-            self.log.error(f"start_battle(): Error: {e.__class__.__name__} - {e}")
+            self.log.error(f"start_battle(): {e.__class__.__name__} - {e}")
 
     # TODO
     # def pass_command
@@ -104,7 +104,7 @@ class CM_Core(CM_API_Client, CM_GUI):
             self.mark_complete = True
             self.post_heartbeat_event(None, None, None)
         except Exception as e:
-            self.log.error(f"mark_battle_complete(): Error: {e.__class__.__name__} - {e}")
+            self.log.error(f"mark_battle_complete(): {e.__class__.__name__} - {e}")
 
     # def reset_battle_counts(self) -> None:
 
@@ -129,7 +129,7 @@ class CM_Core(CM_API_Client, CM_GUI):
                     elif user['status'] == "alive":
                         self.allocated_forces_listbox.itemconfig(index, {'fg': '#04B431'})
         except Exception as e:
-            self.log.error(f"update_allocated_forces(): Error: {e.__class__.__name__} - {e}")
+            self.log.error(f"update_allocated_forces(): {e.__class__.__name__} - {e}")
 
     # Refresh User List Function
     def refresh_user_list(self, active_users:dict) -> None:
@@ -159,7 +159,7 @@ class CM_Core(CM_API_Client, CM_GUI):
                     self.refresh_user_list(active_commanders)
                 sleep(1)
             except Exception as e:
-                self.log.error(f"check_for_cm_updates(): Error: {e.__class__.__name__} - {e}")
+                self.log.error(f"check_for_cm_updates(): {e.__class__.__name__} - {e}")
 
     def start_heartbeat_threads(self) -> None:
         """Start the heartbeat threads."""
@@ -194,7 +194,7 @@ class CM_Core(CM_API_Client, CM_GUI):
             else:
                 self.log.debug("stop_heartbeat_threads(): Commander Mode is not connected.")
         except Exception as e:
-            self.log.error(f"Error: {e}")
+            self.log.error(f"stop_heartbeat_threads(): {e.__class__.__name__} - {e}")
 
     def clear_listboxes(self) -> None:
         """Cleanup listboxes when disconnected."""

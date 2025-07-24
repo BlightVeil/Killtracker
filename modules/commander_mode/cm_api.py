@@ -10,7 +10,7 @@ class CM_API_Client():
         """Currently only support death events from the player!"""
         try:
             if not self.api_key["value"]:
-                self.log.error("Error: death event will not be sent because the key does not exist.")
+                self.log.error("Death event will not be sent because the key does not exist.")
                 return
             if not self.heartbeat_status["active"]:
                 self.log.debug("Error: Heartbeat is not active. Death event will not be sent.")
@@ -50,13 +50,13 @@ class CM_API_Client():
             )
             self.log.debug(f"post_heartbeat_event(): Response text: {response.text}")
             if response.status_code != 200:
-                self.log.error(f"Error in posting event: code {response.status_code}")
-                self.log.error(f"Error: event {heartbeat_event} will not be sent!")
+                self.log.error(f"When posting event: code {response.status_code}")
+                self.log.error(f"Event will not be sent! Event dump: {heartbeat_event}")
         except requests.exceptions.RequestException as e:
             self.log.error(f"HTTP Error sending kill event: {e}")
-            self.log.error(f"Error: event {heartbeat_event} will not be sent!")
+            self.log.error(f"Event will not be sent! Event dump: {heartbeat_event}")
         except Exception as e:
-            self.log.error(f"post_heartbeat_event(): Error: {e.__class__.__name__} {e}")
+            self.log.error(f"post_heartbeat_event(): {e.__class__.__name__} {e}")
 
     def post_heartbeat(self) -> None:
         """Sends a heartbeat to the server every interval and updates the UI with active commanders."""        
@@ -64,7 +64,7 @@ class CM_API_Client():
             try:
                 sleep(self.heartbeat_interval)
                 if not self.api_key["value"]:
-                    self.log.warning("Error: heartbeat will not be sent because the key does not exist.")
+                    self.log.warning("Heartbeat will not be sent because the key does not exist.")
                     # Call disconnect commander and exit
                     self.toggle_commander()
                     break
@@ -107,4 +107,4 @@ class CM_API_Client():
             except requests.RequestException as e:
                 self.log.error(f"HTTP Error when sending heartbeat: {e}")
             except Exception as e:
-                self.log.error(f"post_heartbeat(): Error: {e.__class__.__name__} {e}")
+                self.log.error(f"post_heartbeat(): {e.__class__.__name__} {e}")

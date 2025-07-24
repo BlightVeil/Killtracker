@@ -114,7 +114,7 @@ class API_Client():
         try:
             entered_key = self.gui.key_entry.get().strip()  # Access key_entry in GUI here
         except Exception as e:
-            self.log.error(f"load_activate_key(): Error parsing key: {e.__class__.__name__} {e}")
+            self.log.error(f"load_activate_key(): Parsing key: {e.__class__.__name__} {e}")
         try:
             if not entered_key:
                 entered_key = self.cfg_handler.load_cfg("key")
@@ -137,11 +137,11 @@ class API_Client():
                         thr = Thread(target=self.start_api_key_countdown, daemon=True)
                         thr.start()
                 else:
-                    self.log.error("Error: Invalid key. Please enter a valid key from Discord.")
+                    self.log.error("Invalid key. Please enter a valid key from Discord.")
                     self.api_key["value"] = None
                     self.gui.api_status_label.config(text="Key Status: Invalid", fg=self.key_status_invalid_color)
             else:
-                self.log.error("Error: RSI handle name has not been found yet!")
+                self.log.error("RSI handle name has not been found yet!")
                 self.gui.api_status_label.config(text="Key Status: Invalid", fg=self.key_status_invalid_color)
         except Exception as e:
             self.log.error(f"Error activating key: {e.__class__.__name__} {e}")
@@ -172,7 +172,7 @@ class API_Client():
                 if post_key_exp_result:
                     return post_key_exp_result
                 else:
-                    self.log.error("Error: Key expiration time not sent in Servitor response.")
+                    self.log.error("Key expiration time not sent in Servitor response.")
             elif response.status_code == 403:
                 self.connection_healthy = False
                 return "invalidated"
@@ -181,9 +181,9 @@ class API_Client():
         except requests.exceptions.RequestException as e:
             #self.gui.async_loading_animation()
             self.log.error(f"HTTP Error sending key expiration time event: {e}")
-            self.log.error(f"Error: key expiration time will not be sent!")
+            self.log.error(f"Key expiration time will not be sent!")
         except Exception as e:
-            self.log.error(f"post_api_key_expiration_time(): Error: {e.__class__.__name__} {e}")
+            self.log.error(f"post_api_key_expiration_time(): {e.__class__.__name__} {e}")
         # Fallback
         self.connection_healthy = False
         return "error"
@@ -206,7 +206,9 @@ class API_Client():
                 if not self.api_key["value"]:
                     raise Exception("Request to get the expiration time will not be sent because the API key does not exist.")
                 if self.rsi_handle["current"] == "N/A":
-                    raise Exception("RSI handle name has not been found yet!")
+                    self.log.debug("RSI handle name does not exist. Game was closed?")
+                    continue
+
                 # Get the expiration time from the server (already returned in UTC)
                 post_key_exp_result = self.post_api_key_expiration_time()
                 if post_key_exp_result == "error":
@@ -268,8 +270,8 @@ class API_Client():
                         stop_countdown()
             except Exception as e:
                 self.log.error(f"General error in key expiration countdown: {e.__class__.__name__} {e}")
-
-            sleep(self.countdown_interval)
+            finally:
+                sleep(self.countdown_interval)
         
 #########################################################################################################
 ### LOG PARSER API                                                                                    ###
@@ -279,7 +281,7 @@ class API_Client():
         """Get data map from the server."""
         try:
             if not self.api_key["value"]:
-                self.log.warning("Error: Data map for {} will not be pulled because the key does not exist. Using default mappings.")
+                self.log.warning("Data map for {} will not be pulled because the key does not exist. Using default mappings.")
                 return
             
             url = f"{self.api_fqdn}/api/server/data/{data_type}"
@@ -311,14 +313,14 @@ class API_Client():
             self.log.error(f"HTTP Error when pulling data for {data_type}: {e}")
             self.connection_healthy = False
         except Exception as e:
-            self.log.error(f"get_data_map(): Error: {e.__class__.__name__} {e}")
+            self.log.error(f"get_data_map(): {e.__class__.__name__} {e}")
             self.connection_healthy = False
 
     def post_kill_event(self, kill_result: dict, endpoint: str) -> bool:
         """Post the kill parsed from the log."""
         try:
             if not self.api_key["value"]:
-                self.log.error("Error: kill event will not be sent because the key does not exist. Please enter a valid Kill Tracker key to establish connection with Servitor...")
+                self.log.error("Kill event will not be sent because the key does not exist. Please enter a valid Kill Tracker key to establish connection with Servitor...")
                 return
             
             url = f"{self.api_fqdn}/{endpoint}"
@@ -344,9 +346,9 @@ class API_Client():
             self.gui.async_loading_animation()
             self.log.error(f"HTTP Error sending kill event: {e}")
         except Exception as e:
-            self.log.error(f"post_kill_event(): Error: {e.__class__.__name__} {e}")
+            self.log.error(f"post_kill_event(): {e.__class__.__name__} {e}")
         # Failure state
-        self.log.error(f"Error: kill event {kill_result} will not be sent!")
+        self.log.error(f"Kill event will not be sent! Event dump: {kill_result}")
         self.connection_healthy = False
         pickle_payload = {"kill_result": kill_result, "endpoint": endpoint}
         if pickle_payload not in self.cfg_handler.cfg_dict["pickle"]:
