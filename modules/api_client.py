@@ -19,7 +19,7 @@ class API_Client():
         self.monitoring = monitoring
         self.local_version = local_version
         self.rsi_handle = rsi_handle
-        self.request_timeout = 3
+        self.request_timeout = 60
         self.api_key = {"value": None}
         self.api_fqdn = "http://blightveil.org:25966"
         self.sc_data = {"weapons": [], "ships": [], "ignoredVictimRules": []}
@@ -328,7 +328,7 @@ class API_Client():
                 'content-type': 'application/json',
                 'Authorization': self.api_key["value"] if self.api_key["value"] else ""
             }
-            self.log.debug(f"post_kill_event(): Request payload: {kill_result['data']}")
+            self.log.debug(f"post_kill_event(): Sending to API {endpoint} the payload: {kill_result['data']}")
             response = requests.post(
                 url, 
                 headers=headers, 
