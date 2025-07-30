@@ -349,10 +349,16 @@ class LogParser():
                 kill_result["result"] = "reset"
             else:
                 # Current user killed other player
+                if self.game_mode == "EA_FreeFlight" and self.active_ship["current"] == "FPS":
+                    # Handle ship change when people reset in AC FF too fast
+                    killers_ship = self.active_ship["previous"]
+                else:
+                    killers_ship = self.active_ship["current"]
+
                 kill_result["result"] = "killer"
                 kill_result["data"] = {
                     'player': curr_user,
-                    'killers_ship': self.active_ship["current"],
+                    'killers_ship': killers_ship,
                     'victim': killed,
                     'time': kill_time,
                     'zone': killed_zone,
@@ -382,12 +388,18 @@ class LogParser():
             weapon = split_line[15].strip('\'')
             mapped_weapon = self.get_sc_data("weapons", weapon)
 
+            # Handle ship change when people reset in AC FF too fast
+            if self.active_ship["current"] == "FPS":
+                victim_ship = self.active_ship["previous"]
+            else:
+                victim_ship = self.active_ship["current"]
+
             death_result["result"] = "killed"
             death_result["data"] = {
                 'time': kill_time,
                 'player': killer,
                 'victim': curr_user,
-                'victim_ship': self.active_ship["previous"],
+                'victim_ship': victim_ship,
                 'weapon': mapped_weapon,
                 'zone': self.active_ship["current"],
                 'game_mode': self.game_mode,
