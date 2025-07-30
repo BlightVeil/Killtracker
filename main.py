@@ -31,7 +31,7 @@ class KillTracker():
         self.mute_state = {"enabled": False}
         self.rsi_handle = {"current": "N/A"}
         self.player_geid = {"current": "N/A"}
-        self.active_ship = {"current": "N/A"}
+        self.active_ship = {"current": "N/A", "previous": "N/A"}
         self.update_queue = Queue()    
         
     def check_if_process_running(self, process_name:str) -> str:

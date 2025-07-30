@@ -206,7 +206,7 @@ class API_Client():
                 if not self.api_key["value"]:
                     raise Exception("Request to get the expiration time will not be sent because the API key does not exist.")
                 if self.rsi_handle["current"] == "N/A":
-                    self.log.debug("RSI handle name does not exist. Game was closed?")
+                    self.log.debug("start_api_key_countdown(): RSI handle name does not exist. Game was closed?")
                     continue
 
                 # Get the expiration time from the server (already returned in UTC)

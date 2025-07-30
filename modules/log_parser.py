@@ -135,6 +135,7 @@ class LogParser():
                     ship_data = self._extract_ship_info(line)
                     if ship_data:
                         self.active_ship["current"] = ship_data["ship_type"]
+                        self.active_ship["previous"] = ship_data["ship_type"]
                         self.active_ship_id = ship_data["ship_id"]
                         self.log.info(f"Entered ship: {self.active_ship['current']} (ID: {self.active_ship_id})")
                         self.gui.update_vehicle_status(self.active_ship["current"])
@@ -167,7 +168,8 @@ class LogParser():
                 self.set_player_zone(line, False)
             if "CActor::Kill" in line and not self.check_ignored_victims(line) and upload_kills:
                 kill_result = self.parse_kill_line(line, self.rsi_handle["current"])
-                self.log.debug(f"read_log_line(): kill_result with: {line}.")
+                self.log.debug(f"read_log_line(): Processing kill_result with raw log: {line}.")
+                self.log.debug(f"read_log_line(): Enriched kill_result payload is: {kill_result}.")
                 # Do not send
                 if kill_result["result"] == "exclusion" or kill_result["result"] == "reset":
                     self.log.debug(f"read_log_line(): Not posting {kill_result['result']} death: {line}.")
@@ -222,7 +224,8 @@ class LogParser():
     def set_ac_ship(self, line:str) -> None:
         """Parse log for current active ship."""
         self.active_ship["current"] = line.split(' ')[5][1:-1]
-        self.log.debug(f"Player has entered ship: {self.active_ship['current']}")
+        self.active_ship["previous"] = line.split(' ')[5][1:-1]
+        self.log.debug(f"set_ac_ship(): Player has entered ship: {self.active_ship['current']}")
         self.gui.update_vehicle_status(self.active_ship["current"])
 
     def destroy_player_zone(self) -> None:
@@ -240,6 +243,7 @@ class LogParser():
         if 0 == line_index:
             self.log.debug(f"Active Zone Change: {self.active_ship['current']}")
             self.active_ship["current"] = "FPS"
+            self.active_ship_id = "N/A"
             self.gui.update_vehicle_status("FPS")
             return
         if not use_jd:
@@ -250,6 +254,7 @@ class LogParser():
         for x in self.global_ship_list:
             if potential_zone.startswith(x):
                 self.active_ship["current"] = potential_zone[:potential_zone.rindex('_')]
+                self.active_ship["previous"] = potential_zone[:potential_zone.rindex('_')]
                 self.active_ship_id = potential_zone[potential_zone.rindex('_') + 1:]
                 self.log.debug(f"Active Zone Change: {self.active_ship['current']} with ID: {self.active_ship_id}")
                 self.cm.post_heartbeat_event(None, None, self.active_ship["current"])
@@ -347,6 +352,7 @@ class LogParser():
                 kill_result["result"] = "killer"
                 kill_result["data"] = {
                     'player': curr_user,
+                    'killers_ship': self.active_ship["current"],
                     'victim': killed,
                     'time': kill_time,
                     'zone': killed_zone,
@@ -354,7 +360,6 @@ class LogParser():
                     'rsi_profile': rsi_profile,
                     'game_mode': self.game_mode,
                     'client_ver': self.local_version,
-                    'killers_ship': self.active_ship["current"],
                     'anonymize_state': self.anonymize_state
                 }
             return kill_result
@@ -372,16 +377,21 @@ class LogParser():
                 return death_result
 
             split_line = line.split(' ')
-
             kill_time = split_line[0].strip('\'')
             killer = split_line[12].strip('\'')
+            weapon = split_line[15].strip('\'')
+            mapped_weapon = self.get_sc_data("weapons", weapon)
 
             death_result["result"] = "killed"
             death_result["data"] = {
                 'time': kill_time,
                 'player': killer,
                 'victim': curr_user,
+                'victim_ship': self.active_ship["previous"],
+                'weapon': mapped_weapon,
+                'zone': self.active_ship["current"],
                 'game_mode': self.game_mode,
+                'client_ver': self.local_version
             }
             return death_result
         except Exception as e:

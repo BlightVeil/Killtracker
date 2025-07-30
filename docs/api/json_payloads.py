@@ -18,7 +18,7 @@ kill_result = {
         "rsi_profile": rsi_profile,
         "game_mode": self.game_mode,
         "client_ver": "7.0",
-        "killers_ship": self.active_ship,
+        "killers_ship": self.active_ship["current"],
         "anonymize_state": self.anonymize_state
     }
 }
