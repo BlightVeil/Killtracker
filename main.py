@@ -140,8 +140,8 @@ class KillTracker():
                 elif not game_running and self.monitoring["active"]:  # Log only when transitioning to stopped
                     self.log.warning("Star Citizen has stopped.")
                     self.rsi_handle["current"] = "N/A"
-                    self.player_geid["current"] = "N/A"
                     self.active_ship["current"] = "N/A"
+                    self.player_geid["current"] = "N/A"
                     self.monitoring["active"] = False
 
             except Exception as e:

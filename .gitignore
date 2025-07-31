@@ -6,5 +6,6 @@ build/
 dist/
 sounds/
 static/sounds/
+poc/
 *.spec
 *.cfg

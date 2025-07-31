@@ -117,6 +117,7 @@ class LogParser():
                 self.log.error(f"Error reading game log file: {e.__class__.__name__} {e}")
         sc_log.close()
         self.log.info("Game log monitoring has stopped.")
+        self.gui.update_vehicle_status("N/A")
 
     def _extract_ship_info(self, line):
         match = re.search(r"for '([\w]+(?:_[\w]+)+)_(\d+)'", line)
