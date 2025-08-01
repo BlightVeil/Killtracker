@@ -8,11 +8,12 @@ from pathlib import Path
 class Cfg_Handler:
     """Config Handler with backward compatibility and per-account encrypted config."""
 
-    def __init__(self, program_state, rsi_handle):
+    def __init__(self, program_state, monitoring, rsi_handle):
         self.log = None
         self.gui = None
         self.api = None
         self.program_state = program_state
+        self.monitoring = monitoring
         self.rsi_handle = rsi_handle
         self.old_cfg_path = Path.cwd() / "bv_killtracker.cfg"
         self.crypt_key = None
@@ -128,9 +129,10 @@ class Cfg_Handler:
         """Pickle and unpickle kill logs."""
         while self.program_state["enabled"]:
             try:
-                if len(self.cfg_dict["pickle"]) > 0:
-                    if self.log:
-                        self.log.debug(f'Current buffer: {self.cfg_dict["pickle"]}.')
+                if self.log:
+                    self.log.debug(f'Current pickling buffer: {self.cfg_dict["pickle"]}')
+                
+                if self.monitoring["active"] and len(self.cfg_dict["pickle"]) > 0:
                     self.save_cfg("pickle", self.cfg_dict["pickle"])
                     if self.api and getattr(self.api, "connection_healthy", False):
                         pickle_payload = self.cfg_dict["pickle"][0]

@@ -168,7 +168,7 @@ def main():
 
     try:
         cfg_module = Cfg_Handler(
-            kt.program_state, kt.rsi_handle
+            kt.program_state, kt.monitoring, kt.rsi_handle
         )
     except Exception as e:
         print(f"main(): ERROR in creating the Config Handler module: {e.__class__.__name__} {e}")
