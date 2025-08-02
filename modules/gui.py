@@ -55,11 +55,14 @@ class AppLogger():
 
 class GUI():
     """GUI for the Kill Tracker."""
-    def __init__(self, local_version, anonymize_state):
+    def __init__(self, cfg_handler, local_version, anonymize_state, mute_state):
+        self.cfg_handler = cfg_handler
         self.local_version = local_version
         self.anonymize_state = anonymize_state
+        self.mute_state = mute_state
         self.app = None
         self.log = None
+        self.sounds = None
         self.api = None
         self.cm = None
         self.key_entry = None
@@ -68,6 +71,7 @@ class GUI():
         self.max_killstreak_label = None
         self.session_kills_label = None
         self.commander_mode_button = None
+        self.init_run = True
 
     def setup_app_log_display(self):
         """Setup app logging in a text display area."""
@@ -98,6 +102,30 @@ class GUI():
             self.debug_button.config(text="Debug Mode Enabled", fg="#000000", bg="#04B431")
             self.log.success(f"Turned on Debug Mode.")
 
+    def toggle_mute(self):
+        """Handle mute button."""
+        if self.mute_state["enabled"]:
+            self.mute_state["enabled"] = False
+            # Call volume change
+            self.sounds.set_volume(-1.0)
+            self.mute_button.config(text="🔊", fg="#ffffff", bg="#484759")
+        else:
+            self.mute_state["enabled"] = True
+            # Call volume change
+            self.sounds.set_volume(-1.0)
+            self.mute_button.config(text="🔇", fg="#ffffff", bg="#8A0000")
+
+    def handle_volume(self, volume):
+        """Handle volume."""
+        if self.init_run:
+            # Hack to avoid overriding initial volume setting loading from cfg
+            self.init_run = False
+        else:
+            # Unmute volume if slider is changed
+            self.mute_state["enabled"] = False
+            self.mute_button.config(text="🔊", fg="#ffffff", bg="#484759")
+            self.sounds.set_volume(volume)
+
     def async_loading_animation(self) -> None:
         def animate():
             try:
@@ -126,7 +154,7 @@ class GUI():
         )
         return label
 
-    def create_button(self, window=None, text: str = None, font: tuple = None, command=None, bg: str = None, fg: str = None) -> tk.Button:
+    def create_button(self, window=None, text: str = None, font: tuple = None, command=None, bg: str = None, fg: str = None, height: int = None, width: int = None) -> tk.Button:
         """Setup button."""
         button = tk.Button(
             master=window,
@@ -135,6 +163,8 @@ class GUI():
             command=command,
             bg=bg,
             fg=fg,
+            height=height,
+            width=width
         )
         return button
 
@@ -142,21 +172,21 @@ class GUI():
         """Add buttons for modules."""
         # API Key Input Frame
         key_frame = tk.Frame(self.app, bg="#484759")
-        key_frame.pack(pady=(10, 10))
+        key_frame.pack(padx=(0, 0), pady=(20, 10))
 
         key_label = self.create_label(
             key_frame, text="Enter Key:", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
         )
-        key_label.pack(side=tk.LEFT, padx=(50, 5))
+        key_label.pack(side=tk.LEFT, pady=(0, 0))
 
         self.key_entry = tk.Entry(key_frame, width=30, font=("Times New Roman", 12))
-        self.key_entry.pack(side=tk.LEFT)
+        self.key_entry.pack(side=tk.LEFT, pady=(0, 0))
 
         # API Status Label
         self.api_status_label = self.create_label(
-            self.app, text="Key Status: Not Validated", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+            self.app, text="Key Status: Not Validated", font=("Times New Roman", 12), fg="#ff0000", bg="#484759"
         )
-        self.api_status_label.pack(pady=(10, 10))
+        self.api_status_label.pack(pady=(0, 10))
 
         # Kill Frame
         kill_frame = tk.Frame(self.app, bg="#484759")
@@ -164,51 +194,101 @@ class GUI():
 
         # Current Killstreak Label
         self.curr_killstreak_label = self.create_label(
-            kill_frame, text="Current Killstreak: 0", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+            kill_frame, text="Current Killstreak: 0", font=("Times New Roman", 12, 'bold'), fg="#ffffff", bg="#484759"
         )
-        self.curr_killstreak_label.pack(side=tk.LEFT, padx=(0, 20), pady=(10, 10))
+        self.curr_killstreak_label.pack(side=tk.LEFT, padx=(0, 20), pady=(0, 0))
 
         # Max KillStreak Label
         self.max_killstreak_label = self.create_label(
-            kill_frame, text="Max Killstreak: 0", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+            kill_frame, text="Max Killstreak: 0", font=("Times New Roman", 12, 'bold'), fg="#ffffff", bg="#484759"
         )
-        self.max_killstreak_label.pack(side=tk.LEFT, padx=(0, 20), pady=(10, 10))
+        self.max_killstreak_label.pack(side=tk.LEFT, padx=(0, 20), pady=(0, 0))
 
         # Kills Total Label
         self.session_kills_label = self.create_label(
-            kill_frame, text="Total Session Kills: 0", font=("Times New Roman", 12), fg="#ffffff", bg="#484759"
+            kill_frame, text="Total Session Kills: 0", font=("Times New Roman", 12, 'bold'), fg="#ffffff", bg="#484759"
         )
-        self.session_kills_label.pack(side=tk.RIGHT, pady=(10, 10))
+        self.session_kills_label.pack(side=tk.LEFT, padx=(0, 20), pady=(0, 0))
+
+        # Deaths Total Label
+        self.session_deaths_label = self.create_label(
+            kill_frame, text="Total Session Deaths: 0", font=("Times New Roman", 12, 'bold'), fg="#ffffff", bg="#484759"
+        )
+        self.session_deaths_label.pack(side=tk.LEFT, padx=(0, 20), pady=(0, 0))
+        
+        # KD Ratio Label
+        self.kd_ratio_label = self.create_label(
+            kill_frame, text="KD Ratio: --", font=("Times New Roman", 12, 'bold'), fg="#00FFFF", bg="#484759"
+        )
+        self.kd_ratio_label.pack(side=tk.RIGHT, padx=(0, 20), pady=(0, 0))
+        
+        # Vehicle Status Label
+        self.vehicle_status_label = self.create_label(
+            kill_frame, text="Status: FPS", font=("Times New Roman", 12, 'bold'), fg="#FFD700", bg="#484759"
+        )
+        self.vehicle_status_label.pack(side=tk.RIGHT, padx=(0, 20), pady=(0, 0))
 
         # Update the button to use the new combined function
         activate_load_key_button = self.create_button(
-            key_frame, text="Activate & Load Key", font=("Times New Roman", 12), command=self.api.load_activate_key, bg="#000000", fg="#ffffff"
+            key_frame, text="Activate & Load Key", font=("Times New Roman", 12), command=self.api.load_activate_key, fg="#ffffff", bg="#000000"
         )
         activate_load_key_button.pack(side=tk.LEFT, padx=(5, 0))
 
         # Options Frame
         options_frame = tk.Frame(self.app, bg="#484759")
-        options_frame.pack(pady=(10, 10))
+        options_frame.pack(pady=(0, 0))
 
         # Commander Mode Button
         self.commander_mode_button = self.create_button(
-            options_frame, text="Commander Mode", font=("Times New Roman", 12), command=self.cm.setup_commander_mode, bg="#000000", fg="#ffffff"
+            options_frame, text="Commander Mode", font=("Times New Roman", 12), command=self.cm.setup_commander_mode, fg="#ffffff", bg="#000000"
         )
-        self.commander_mode_button.pack(side=tk.LEFT, pady=(10, 10))
-
-        # App log text area
-        self.log = AppLogger(self.setup_app_log_display())
-        self.log.text_widget.pack(padx=10, pady=10)
+        self.commander_mode_button.pack(side=tk.LEFT, pady=(0, 0))
 
         self.anonymize_button = self.create_button(
-            options_frame, text=" Enable Anonymity ", font=("Times New Roman", 12), command=self.toggle_anonymize, bg="#000000", fg="#ffffff"
+            options_frame, text=" Enable Anonymity ", font=("Times New Roman", 12), command=self.toggle_anonymize, fg="#ffffff", bg="#000000"
         )
         self.anonymize_button.pack(side=tk.LEFT, padx=(5, 0))
 
         self.debug_button = self.create_button(
-            options_frame, text=" Enable Debug Mode ", font=("Times New Roman", 12), command=self.toggle_debug, bg="#000000", fg="#ffffff"
+            options_frame, text=" Enable Debug Mode ", font=("Times New Roman", 12), command=self.toggle_debug, fg="#ffffff", bg="#000000"
         )
-        self.debug_button.pack(side=tk.RIGHT, padx=(5, 0), pady=(5, 5))
+        self.debug_button.pack(side=tk.LEFT, padx=(5, 0), pady=(5, 5))
+
+        if self.mute_state["enabled"]:
+            self.mute_button = self.create_button(
+                options_frame, text="🔇", font=("Times New Roman", 14), command=self.toggle_mute, fg="#ffffff", bg="#8A0000", height=0, width=3
+            )
+        else:
+            self.mute_button = self.create_button(
+                options_frame, text="🔊", font=("Times New Roman", 14), command=self.toggle_mute, fg="#ffffff", bg="#484759", height=0, width=3
+            )
+        self.mute_button.pack(side=tk.LEFT, padx=(50, 0))
+
+        volume_slider = tk.Scale(
+            options_frame,
+            from_=0,
+            to=100,
+            orient=tk.HORIZONTAL,
+            length=200,
+            bg="#484759",
+            fg="#ffffff",
+            troughcolor="#282a36",
+            highlightbackground="#484759",
+            command=lambda val: self.handle_volume(int(val) / 100)
+        )
+        volume_slider.set(self.cfg_handler.cfg_dict["volume"]["level"] * 100)  # Default volume to 50%
+        volume_slider.pack(side=tk.LEFT, padx=(5, 0), pady=(0, 15))
+        
+        # App logger area
+        self.log = AppLogger(self.setup_app_log_display())
+        self.log.text_widget.pack(padx=10, pady=10)
+
+    def update_vehicle_status(self, status_text):
+        if hasattr(self, 'vehicle_status_label') and self.vehicle_status_label:
+            self.vehicle_status_label.config(text=f"Status: {status_text}")
+            self.app.update_idletasks() 
+        else:
+            self.log.error("update_vehicle_status(): vehicle_status_label is not set or does not exist.")
 
     def setup_gui(self, game_running):
         """Setup the GUI."""
@@ -216,7 +296,7 @@ class GUI():
         try:
             self.app = tk.Tk(useTk=True)
             self.app.title(f"BlightVeil Kill Tracker v{self.local_version}")
-            self.app.minsize(width=800, height=800)
+            self.app.minsize(width=890, height=890)
             self.app.configure(bg="#484759")
         except Exception as e:
             print(f"setup_gui(): ERROR: Init setup failed: {e.__class__.__name__} {e}")
@@ -251,7 +331,7 @@ class GUI():
             update_message = self.api.check_for_kt_updates()
             if update_message:
                 update_label = self.create_label(
-                    self.app, text=update_message, font=("Times New Roman", 12), fg="#ff5555", bg="#484759", wraplength=700, justify="center", cursor="hand2"
+                    self.app, text=update_message, font=("Times New Roman", 12), wraplength=700, justify="center", cursor="hand2", fg="#ff5555", bg="#484759"
                 )
                 update_label.pack(pady=(10, 10))
                 update_label.bind("<Button-1>", self.api.open_github(update_message))
@@ -293,6 +373,6 @@ class GUI():
                 fg="#bcbcd8",
                 bg="#3e3b4d",
             )
-            footer_text.pack(pady=5)
+            footer_text.pack(pady=(5, 5))
         except Exception as e:
             print(f"setup_gui(): Error rendering the footer: {e.__class__.__name__} {e}")

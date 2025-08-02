@@ -115,6 +115,26 @@ class CM_GUI():
             )
             add_all_to_fleet_button.pack(pady=(10, 10))
 
+            take_command_button = tk.Button(
+                self.commander_window, text="Take Command of Fleet", font=("Times New Roman", 12), command=self.take_command, bg="#000000", fg="#ffffff"
+            )
+            take_command_button.pack(pady=(10, 10))
+
+            abort_command_button = tk.Button(
+                self.commander_window, text="Abort Command", font=("Times New Roman", 12), command=self.abort_command_func, bg="#000000", fg="#ffffff"
+            )
+            abort_command_button.pack(pady=(10, 10))
+
+            start_battle_button = tk.Button(
+                self.commander_window, text="Start Battle", font=("Times New Roman", 12), command=self.start_battle_func, bg="#000000", fg="#ffffff"
+            )
+            start_battle_button.pack(pady=(10, 10))
+
+            mark_battle_complete_button = tk.Button(
+                self.commander_window, text="Mark a Battle Done", font=("Times New Roman", 12), command=self.mark_battle_complete_func, bg="#000000", fg="#ffffff"
+            )
+            mark_battle_complete_button.pack(pady=(10, 10))
+
             # Disable commander mode button in main GUI to prevent dupe windows from being spawned
             self.gui.commander_mode_button["state"] = tk.DISABLED
             

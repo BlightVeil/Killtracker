@@ -9,6 +9,7 @@ import warnings
 warnings.filterwarnings("ignore", message="Couldn't find ffmpeg or avconv")
 
 # Import kill tracker modules
+from modules.cfg_handler import Cfg_Handler
 from modules.api_client import API_Client
 from modules.gui import GUI
 from modules.log_parser import LogParser
@@ -18,13 +19,14 @@ from modules.commander_mode.cm_core import CM_Core
 class KillTracker():
     """Official Kill Tracker for BlightVeil."""
     def __init__(self):
-        self.local_version = "1.5"
+        self.local_version = "1.6"
         self.log = None
         self.log_parser = None
-        #self.stop_event = Event()
         self.monitoring = {"active": False}
         self.heartbeat_status = {"active": False}
+        self.program_state = {"enabled": True}
         self.anonymize_state = {"enabled": False}
+        self.mute_state = {"enabled": False}
         self.rsi_handle = {"current": "N/A"}
         self.player_geid = {"current": "N/A"}
         self.active_ship = {"current": "N/A"}
@@ -34,7 +36,7 @@ class KillTracker():
         """Check if a process is running by name."""
         try:
             for proc in process_iter(['name', 'exe']):
-                if process_name.lower() in proc.info['name'].lower():
+                if process_name.lower() == proc.info['name'].lower():
                     return proc.info['exe']
         except Exception as e:
             self.log.error(f"check_if_process_running(): Error: {e.__class__.__name__} {e}")
@@ -43,7 +45,7 @@ class KillTracker():
     def is_game_running(self) -> bool:
         """Check if Star Citizen is running."""
         try:
-            if self.check_if_process_running("StarCitizen"):
+            if self.check_if_process_running("StarCitizen_Launcher.exe"):
                 return True
             return False
         except Exception as e:
@@ -53,14 +55,14 @@ class KillTracker():
         """Check for RSI Launcher and Star Citizen Launcher, and get the log path."""
         try:
             # Check if RSI Launcher is running
-            rsi_launcher_path = self.check_if_process_running("RSI Launcher")
+            rsi_launcher_path = self.check_if_process_running("RSI Launcher.exe")
             if not rsi_launcher_path:
                 self.log.warning("RSI Launcher not running.")
                 return ""
             self.log.debug(f"RSI Launcher running at: {rsi_launcher_path}")
 
             # Check if Star Citizen Launcher is running
-            sc_launcher_path = self.check_if_process_running("StarCitizen")
+            sc_launcher_path = self.check_if_process_running("StarCitizen_Launcher.exe")
             if not sc_launcher_path:
                 self.log.warning("Star Citizen Launcher not running.")
                 return ""
@@ -103,7 +105,7 @@ class KillTracker():
 
     def monitor_game_state(self) -> None:
         """Continuously monitor the game state and manage log monitoring."""
-        while True: # FIXME NEEDS BREAK CONDITION?
+        while self.program_state["enabled"]:
             try:
                 game_running = self.is_game_running()
 
@@ -143,30 +145,49 @@ def main():
         print(f"main(): ERROR in creating the KillTracker instance: {e.__class__.__name__} {e}")
 
     try:
+        cfg_module = Cfg_Handler(kt.program_state, kt.rsi_handle["current"])
+    except Exception as e:
+        print(f"main(): ERROR in creating the Config Handler module: {e.__class__.__name__} {e}")
+
+    try:
         gui_module = GUI(
-            kt.local_version, kt.anonymize_state
+            cfg_module, kt.local_version, kt.anonymize_state, kt.mute_state
         )        
     except Exception as e:
         print(f"main(): ERROR in creating the GUI module: {e.__class__.__name__} {e}")
 
     try:
+        sound_module = Sounds(
+            cfg_module, kt.mute_state
+        )          
+    except Exception as e:
+        print(f"main(): ERROR in setting up the Sounds module: {e.__class__.__name__} {e}")
+
+    # Link Sounds to GUI here (to resolve circular dependency)
+    try:
+        gui_module.sounds = sound_module
+    except Exception as e:
+        print(f"main(): ERROR linking Sounds to GUI: {e.__class__.__name__} {e}")
+
+    try:
         api_client_module = API_Client(
-            gui_module, kt.monitoring, kt.local_version, kt.rsi_handle
+            cfg_module, gui_module, kt.monitoring, kt.local_version, kt.rsi_handle
         )
     except Exception as e:
         print(f"main(): ERROR in setting up the API Client module: {e.__class__.__name__} {e}")
 
+    # Link API to Cfg Handler here (to resolve circular dependency)
     try:
-        sound_module = Sounds()
+        cfg_module.api = api_client_module
     except Exception as e:
-        print(f"main(): ERROR in setting up the Sounds module: {e.__class__.__name__} {e}")
+        print(f"main(): ERROR linking API to Cfg Handler: {e.__class__.__name__} {e}")
 
     try:
         cm_module = CM_Core(
             gui_module, api_client_module, kt.monitoring, kt.heartbeat_status, kt.rsi_handle, kt.active_ship, kt.update_queue
         )
     except Exception as e:
-        print(f"main(): ERROR in setting up the API Client module: {e.__class__.__name__} {e}")
+        print(f"main(): ERROR in setting up the Commander Mode Core module: {e.__class__.__name__} {e}")
 
     try:
         log_parser_module = LogParser(
@@ -197,6 +218,7 @@ def main():
             kt.log_parser = log_parser_module
             # Add logger ref to classes
             kt.log = gui_module.log
+            cfg_module.log = gui_module.log
             api_client_module.log = gui_module.log
             sound_module.log = gui_module.log
             cm_module.log = gui_module.log
@@ -208,6 +230,12 @@ def main():
             sound_module.setup_sounds()
         except Exception as e:
             print(f"main(): ERROR in setting up the sounds module: {e.__class__.__name__} {e}")
+        
+        try:
+            # Kill Tracker log pickler
+            monitor_thr = Thread(target=cfg_module.log_pickler, daemon=True).start()
+        except Exception as e:
+            print(f"main(): ERROR starting log pickler: {e.__class__.__name__} {e}")
 
         try:
             # Kill Tracker monitor loop
@@ -219,6 +247,8 @@ def main():
     try:
         # GUI main loop
         gui_module.app.mainloop()
+        # Ensure all threads are stopped
+        kt.program_state["enabled"] = False
     except KeyboardInterrupt:
         print("Program interrupted. Exiting gracefully...")
         kt.monitoring["active"] = False

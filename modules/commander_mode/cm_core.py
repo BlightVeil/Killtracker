@@ -28,6 +28,12 @@ class CM_Core(CM_API_Client, CM_GUI):
         self.join_timeout = 10
         self.heartbeat_interval = 5
 
+        # Battle Tracking info
+        self.is_commander = False
+        self.mark_complete = False
+        self.start_battle = False
+        self.abort_command = False
+
     def allocate_selected_users(self) -> None:
         """Allocate selected Connected Users to Allocated Forces."""
         try:
@@ -60,6 +66,48 @@ class CM_Core(CM_API_Client, CM_GUI):
         except Exception as e:
             self.log.error(f"allocate_all_users(): Error: {e.__class__.__name__} - {e}")
 
+    def take_command(self) -> None:
+        """Start Tracking a battle"""
+        try:
+            self.is_commander = True
+            self.post_heartbeat_event(None, None, None)
+        except Exception as e:
+            self.log.error(f"take_command(): Error: {e.__class__.__name__} - {e}")
+
+    def abort_command_func(self) -> None:
+        """Set flag to abort command and discard remaining kill counts"""
+        try:
+            if self.is_commander:
+                self.abort_command = True
+                self.post_heartbeat_event(None, None, None)
+                self.abort_command = False
+                self.is_commander = False
+        except Exception as e:
+            self.log.error(f"abort_command(): Error: {e.__class__.__name__} - {e}")
+
+    def start_battle_func(self) -> None:
+        """Set flag to abort command and discard remaining kill counts"""
+        try:
+            self.start_battle = True
+            self.mark_complete = False
+            self.post_heartbeat_event(None, None, None)
+        except Exception as e:
+            self.log.error(f"start_battle(): Error: {e.__class__.__name__} - {e}")
+
+    # TODO
+    # def pass_command
+
+    def mark_battle_complete_func(self) -> None:
+        """Set flag to mark battle complete. Will take the name of the battle and post it with servitor."""
+        try:
+            self.start_battle = False
+            self.mark_complete = True
+            self.post_heartbeat_event(None, None, None)
+        except Exception as e:
+            self.log.error(f"mark_battle_complete(): Error: {e.__class__.__name__} - {e}")
+
+    # def reset_battle_counts(self) -> None:
+
     def update_allocated_forces(self) -> None:
         """Update the status of users in the allocated forces list."""
         try:
@@ -79,7 +127,7 @@ class CM_Core(CM_API_Client, CM_GUI):
                     if user['status'] == "dead":
                         self.allocated_forces_listbox.itemconfig(index, {'fg': 'red'})
                     elif user['status'] == "alive":
-                        self.allocated_forces_listbox.itemconfig(index, {'fg': 'green'})
+                        self.allocated_forces_listbox.itemconfig(index, {'fg': '#04B431'})
         except Exception as e:
             self.log.error(f"update_allocated_forces(): Error: {e.__class__.__name__} - {e}")
 
