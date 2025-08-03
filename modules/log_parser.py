@@ -52,6 +52,7 @@ class LogParser():
         except Exception as e:
             self.log.error(f"tail_log(): When opening log file: {e.__class__.__name__} {e}")
         try:
+            self.gui.enable_key_button()
             self.log.warning("Please enter Kill Tracker Key to establish a connection with Servitor. If you don't have a key from a previous session, please generate one in Discord.")
             sleep(1)
             while self.monitoring["active"]:

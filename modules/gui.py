@@ -71,6 +71,7 @@ class GUI():
         self.curr_killstreak_label = None
         self.max_killstreak_label = None
         self.session_kills_label = None
+        self.activate_load_key_button = None
         self.commander_mode_button = None
         self.init_run = True
 
@@ -80,6 +81,9 @@ class GUI():
             self.app, wrap=tk.WORD, width=100, height=20, state=tk.DISABLED, bg="#282a36", fg="#f8f8f2", font=("Consolas", 12)
         )
         return text_area
+    
+    def enable_key_button(self):
+        self.activate_load_key_button["state"] = tk.ACTIVE
     
     def toggle_anonymize(self):
         """Handle anonymize button."""
@@ -242,10 +246,12 @@ class GUI():
         self.kd_ratio_label.pack(side=tk.RIGHT, padx=(0, 20), pady=(0, 0))
 
         # Update the button to use the new combined function
-        activate_load_key_button = self.create_button(
+        self.activate_load_key_button = self.create_button(
             key_frame, text="Activate & Load Key", font=("Times New Roman", 12), command=self.api.load_activate_key, fg="#ffffff", bg="#000000"
         )
-        activate_load_key_button.pack(side=tk.LEFT, padx=(5, 0))
+        self.activate_load_key_button.pack(side=tk.LEFT, padx=(5, 0))
+        # Disable button in main GUI until game is online and ready
+        self.activate_load_key_button["state"] = tk.DISABLED
 
         # Options Frame
         options_frame = tk.Frame(self.app, bg="#484759")
